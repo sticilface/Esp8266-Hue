@@ -23,7 +23,7 @@ for the colour management header files <RgbColor.h> & <HslColor.h>.
 #include <ArduinoJson.h>
 
 #include "HueBridge.h"
-//#include <NeoPixelBus.h> // NeoPixelAnimator branch
+#include <NeoPixelBus.h> // NeoPixelAnimator branch
 
 
 const char* host = "Hue-Bridge";
@@ -37,20 +37,39 @@ WiFiUDP OTA;
 
 ESP8266WebServer HTTP(80);
 
-// // Dynamic memory allocation.... Can also be used... 
-//HueBridge* Hue = NULL; 
-//  Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
+HueBridge* Hue = NULL; 
 
- // #define pixelCount 7 // Strip has 30 NeoPixels
- // #define pixelPin 2 // Strip is attached to GPIO2 on ESP-01
- // #define HUEgroups 3
- // #define HUElights 10
+ #define pixelCount 7 // Strip has 30 NeoPixels
+ #define pixelPin 2 // Strip is attached to GPIO2 on ESP-01
+ #define HUEgroups 3
+ #define HUElights 10
 
  //HueBridge Hue(&HTTP, 10, 5, &HandleHue);
 
- //NeoPixelBus strip = NeoPixelBus(10, 2);
+ NeoPixelBus strip = NeoPixelBus(10, 2);
 
- //NeoPixelAnimator animator(&strip); // NeoPixel animation management object
+ NeoPixelAnimator animator(&strip); // NeoPixel animation management object
+
+
+// void HandleHue(uint8_t Light, HueLight* data) {
+
+// // Hue callback....  
+
+//   //Serial.printf( " | Callback-> Light = %u, Time = %u (%u,%u,%u) | ", Light, Time, rgb.R, rgb.G, rgb.B); 
+  
+//         Light--;
+
+//         //  RgbColor original = strip.GetPixelColor(Light);
+        
+//         // AnimUpdateCallback animUpdate = [=](float progress)
+//         // {
+//         //     RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
+//         //     strip.SetPixelColor(Light, updatedColor);
+//         // };
+//         // animator.StartAnimation(Light, Time, animUpdate);
+
+
+// }
 
 
 
@@ -58,8 +77,19 @@ void HandleHue(uint8_t Light, uint16_t Time, RgbColor rgb) {
 
 // Hue callback....  
 
-  Serial.printf( " | Callback-> Light = %u, Time = %u (%u,%u,%u) | ", Light, Time, rgb.R, rgb.G, rgb.B); 
-//  animator.FadeTo(Time, rgb); 
+  //Serial.printf( " | Callback-> Light = %u, Time = %u (%u,%u,%u) | ", Light, Time, rgb.R, rgb.G, rgb.B); 
+  
+        Light--;
+
+         RgbColor original = strip.GetPixelColor(Light);
+        
+        AnimUpdateCallback animUpdate = [=](float progress)
+        {
+            RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
+            strip.SetPixelColor(Light, updatedColor);
+        };
+        animator.StartAnimation(Light, Time, animUpdate);
+
 
 }
 
@@ -67,8 +97,8 @@ void HandleHue(uint8_t Light, uint16_t Time, RgbColor rgb) {
 
 
 void setup() {
-  //strip.Begin();
-  //strip.Show();
+  strip.Begin();
+  strip.Show();
 
   Serial.begin(115200);
   
@@ -93,6 +123,7 @@ void setup() {
   }
 
   //  Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
+  Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
 
     
       HTTP.on ( "/test", []() {
@@ -113,16 +144,16 @@ void loop() {
   HTTP.handleClient();
   yield(); 
 
-  // OTA_handle();
+  OTA_handle();
 
-  // static unsigned long update_strip_time = 0;  //  keeps track of pixel refresh rate... limits updates to 33 Hz
+  static unsigned long update_strip_time = 0;  //  keeps track of pixel refresh rate... limits updates to 33 Hz
   
-  // if (millis() - update_strip_time > 30)
-  // {
-  //   if ( animator.IsAnimating() ) animator.UpdateAnimations(100);
-  //   strip.Show();
-  //   update_strip_time = millis();
-  // }
+  if (millis() - update_strip_time > 30)
+  {
+    if ( animator.IsAnimating() ) animator.UpdateAnimations(100);
+    strip.Show();
+    update_strip_time = millis();
+  }
 
 
 }

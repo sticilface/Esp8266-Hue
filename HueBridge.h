@@ -28,8 +28,8 @@ save settings
 //  These are from the neopixelbus lib.  https://github.com/Makuna/NeoPixelBus/tree/UartDriven 
 //  Needs to be UARTDRIVEN branch, or Animator Branch
 
-// #include <RgbColor.h>
-// #include <HsbColor.h>
+ #include <RgbColor.h>
+ #include <HsbColor.h>
 
 
 #include "HueBridgeStructs.h"
@@ -39,48 +39,53 @@ save settings
 
 static const char *HTTPMethod_text[] = { "HTTP_ANY", "HTTP_GET", "HTTP_POST", "HTTP_PUT", "HTTP_PATCH", "HTTP_DELETE" };
 
- // class RgbColor;
- // class HsbColor;
+  class RgbColor;
+  class HsbColor;
+
+//typedef std::function<void(uint8_t Light, HueLight* currentlight)> HueHandlerFunction;
+
 
 class HueBridge  
 {
 public:
 	typedef std::function<void(uint8_t Light, uint16_t Time, struct RgbColor rgb)> HueHandlerFunction;
+	//typedef std::function<void(uint8_t Light, HueLight* currentlight)> HueHandlerFunction;
     typedef std::function<void(void)>& GenericFunction; 
 
   	HueBridge(ESP8266WebServer * HTTP, uint8_t lights, uint8_t groups, HueHandlerFunction fn); 
   	~HueBridge(); 
+
   	void initHUE(uint8_t Lightcount, uint8_t Groupcount);
   	
-  	// void SetReply(bool value);  								
+  	void SetReply(bool value);  								
   	
-  	// bool SetLightState(uint8_t light, bool value);				
-  	// bool GetLightState(uint8_t light);			
+  	bool SetLightState(uint8_t light, bool value);				
+  	bool GetLightState(uint8_t light);			
 
-  	// bool SetLightRGB(uint8_t light, RgbColor color);                   //ToDo
-  	// RgbColor GetLightRGB(uint8_t light);          					   //ToDo
+  	bool SetLightRGB(uint8_t light, RgbColor color);                   //ToDo
+  	RgbColor GetLightRGB(uint8_t light);          					   //ToDo
 
-  	 // bool GetGroupState(uint8_t group);                                 //ToDo
-  	 // bool SetGroupState(uint8_t group, bool value);                     //ToDo
+  	 bool GetGroupState(uint8_t group);                                 //ToDo
+  	 bool SetGroupState(uint8_t group, bool value);                     //ToDo
 
   	
-  	// void SetGroupRGB(uint8_t group, uint8_t R, uint8_t G, uint8_t B);  //ToDo
-  	// void GetGroupRGB(uint8_t group);                                   //ToDo
+  	void SetGroupRGB(uint8_t group, uint8_t R, uint8_t G, uint8_t B);  //ToDo
+  	void GetGroupRGB(uint8_t group);                                   //ToDo
 
 
 
-	// struct HueHSB rgb2HUEhsb(struct RgbColor color); 
-	// struct HueHSB xy2HUEhsb(struct HueXYColor xy, uint8_t bri); 
-	// struct HueHSB ct2hsb(long tmpKelvin, uint8_t bri);
+	struct HueHSB rgb2HUEhsb(struct RgbColor color); 
+	struct HueHSB xy2HUEhsb(struct HueXYColor xy, uint8_t bri); 
+	struct HueHSB ct2hsb(long tmpKelvin, uint8_t bri);
 
-	// struct RgbColor HUEhsb2rgb(HueHSB color);	
-	// struct RgbColor XYtorgb(struct HueXYColor); 
-	// struct RgbColor ct2rbg(long tmpKelvin, uint8_t bri); 
+	struct RgbColor HUEhsb2rgb(HueHSB color);	
+	struct RgbColor XYtorgb(struct HueXYColor xy, uint8_t bri); 
+	struct RgbColor ct2rbg(long tmpKelvin, uint8_t bri); 
 
 
-	// struct HueXYColor rgb2xy(struct RgbColor color); 
-	// struct HueXYColor HUEhsb2xy(struct HueHSB color);
-	// struct HueXYColor Ct2xy(long tmpKelvin, uint8_t bri); 
+	struct HueXYColor rgb2xy(struct RgbColor color); 
+	struct HueXYColor HUEhsb2xy(struct HueHSB color);
+	struct HueXYColor Ct2xy(long tmpKelvin, uint8_t bri); 
 
 
 private:

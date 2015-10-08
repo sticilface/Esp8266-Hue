@@ -6,7 +6,7 @@
   		_LightCount(lights),
   		_GroupCount(groups),
   		_Handler(fn),
-  		_returnJSON(true), 
+  		_returnJSON(false), 
   		_macString (String(WiFi.macAddress())), // toDo turn to 4 byte array..
   		_ipString (StringIPaddress(WiFi.localIP())),
   		_netmaskString (StringIPaddress(WiFi.subnetMask())),
@@ -414,23 +414,6 @@ void HueBridge::Handle_Description() {
 
 }
 
-// void HueBridge::Send_HTTPprinter(int code, const char* content, GenericFunction Fn){
-
-//   size_t size = 0; 
-//   Serial.print("  JSON ");
-//   WiFiClient c = _HTTP->client();
-//   printer.Begin(c); 
-//   printer.SetHeader(code, content);
-//   printer.SetCountMode(true);
-// //  Fn();
-//   size = printer.SetCountMode(false);
-// //  Fn();
-//   c.stop();
-//   while(c.connected()) yield();
-//   printer.End(); // free memory...
-//   Serial.printf(" %uB", size); 
-
-// }
 
 /*-------------------------------------------------------------------------------------------
 
@@ -455,6 +438,10 @@ void HueBridge::Put_light () {
     HueLight* currentlight;
     currentlight = &Lights[numberOfTheLight];
 
+    struct RgbColor rgb;
+    struct HueHSB hsb; 
+
+
     //------------------------------------------------------
     //                    JSON set up IN + OUT 
     //------------------------------------------------------
@@ -476,13 +463,14 @@ void HueBridge::Put_light () {
           String response = "/lights/" + lightID + "/state/on"; // + onoff; 
 
           if (onValue) {
-            Serial.print("  ON :");
+//            Serial.print("  ON :");
             currentlight->State = true;
             if (_returnJSON) AddSucessToArray (array, response, F("on") ); 
 
           } else {
-            Serial.print("  OFF :");
+//            Serial.print("  OFF :");
             currentlight->State = false;
+            rgb = RgbColor(0,0,0);
             if (_returnJSON) AddSucessToArray (array, response, F("off") ) ; 
 
           }
@@ -498,15 +486,14 @@ void HueBridge::Put_light () {
      uint16_t hue = currentlight->Hue ;
      uint8_t sat = currentlight->Sat ; 
      uint8_t bri = currentlight->Bri ; 
-     //uint8_t method = 1; 
         
     if (root.containsKey("hue"))
         {
           hue = root["hue"]; 
           String response = "/lights/" + lightID + "/state/hue"; // + onoff; 
-          Serial.print("  HUE -> ");
-          Serial.print(hue);
-          Serial.print(", "); 
+//          Serial.print("  HUE -> ");
+//          Serial.print(hue);
+//          Serial.print(", "); 
           hasHue = true; 
           if (_returnJSON) AddSucessToArray (array, response, root["hue"] ); 
         } 
@@ -515,9 +502,9 @@ void HueBridge::Put_light () {
         {
           sat = root["sat"]; 
           String response = "/lights/" + lightID + "/state/sat"; // + onoff; 
-          Serial.print("  SAT -> ");
-          Serial.print(sat);
-          Serial.print(", "); 
+//          Serial.print("  SAT -> ");
+//          Serial.print(sat);
+//          Serial.print(", "); 
           hasSat = true; 
           if (_returnJSON) AddSucessToArray (array, response, root["sat"]); 
         } 
@@ -526,9 +513,9 @@ void HueBridge::Put_light () {
         {
           bri = root["bri"]; 
           String response = "/lights/" + lightID + "/state/bri"; // + onoff; 
-          Serial.print("  BRI -> ");
-          Serial.print(bri);
-          Serial.print(", "); 
+//          Serial.print("  BRI -> ");
+//          Serial.print(bri);
+//          Serial.print(", "); 
           hasBri = true; 
           if (_returnJSON) AddSucessToArray (array, response, root["bri"]); 
         } 
@@ -542,17 +529,15 @@ void HueBridge::Put_light () {
 
     if (root.containsKey("xy"))
         {
-           //method = 2; 
            xy_instance.x = root["xy"][0];
            xy_instance.y = root["xy"][1];
            currentlight->xy = xy_instance;
-              Serial.print("  XY (");
-              Serial.print(xy_instance.x);
-              Serial.print(",");
-              Serial.print(xy_instance.y);
-              Serial.print(") "); 
+              // Serial.print("  XY (");
+              // Serial.print(xy_instance.x);
+              // Serial.print(",");
+              // Serial.print(xy_instance.y);
+              // Serial.print(") "); 
             hasXy = true; 
-          //  holds the reply 
         if (_returnJSON) {
           JsonObject& nestedObject = array.createNestedObject();          
           JsonObject& sucess = nestedObject.createNestedObject("success");
@@ -579,22 +564,24 @@ void HueBridge::Put_light () {
     //------------------------------------------------------
 
 
-//    RgbColor rgb;
 
-//    if (method == 1) {
-      currentlight->Hue = hue;
-      currentlight->Sat = sat;
-      currentlight->Bri = bri; 
- //     rgb = hsb2rgb(hue, sat, bri); //  designed to handle philips hue RGB ALLOCATED FROM JSON REQUEST
- //     currentlight->xy = rgb2xy(rgb); // COPYED TO LED STATE incase onother applciation requests colour
+
+    if (hasHue || hasBri || hasSat) {
+      currentlight->Hue = hsb.H = hue;
+      currentlight->Sat = hsb.S = sat;
+      currentlight->Bri = hsb.B = bri; 
+
+      rgb = HUEhsb2rgb(hsb); //  designed to handle philips hue RGB ALLOCATED FROM JSON REQUEST
+      currentlight->xy = HUEhsb2xy(hsb); // COPYED TO LED STATE incase onother applciation requests colour
     
-//    } else if (method == 2) {
-//      rgb = xy2rgb(xy_instance);
-//      HsbColor hsb = HsbColor(rgb); 
-//      currentlight->Hue = floor(hsb.H * 182.04 * 360.0); 
-//      currentlight->Sat = floor(hsb.S * 254);
-//      currentlight->Bri = floor(hsb.B * 254);
- //   }    
+   } else if (hasXy) {
+
+      rgb = XYtorgb(xy_instance, bri);  // set the color to return
+      hsb = xy2HUEhsb(xy_instance, bri);  // converts for storage...
+      currentlight->Hue = hsb.H; ///floor(hsb.H * 182.04 * 360.0); 
+      currentlight->Sat = hsb.S; //floor(hsb.S * 254);
+      currentlight->Bri = hsb.B; // floor(hsb.B * 254);  
+   }    
 
 
     //------------------------------------------------------
@@ -612,7 +599,7 @@ void HueBridge::Put_light () {
 
   //  Serial.println();
 //    array.prettyPrintTo(Serial);
-    Serial.println(); 
+//    Serial.println(); 
 
     if (_returnJSON) SendJson(array);
 
@@ -653,14 +640,13 @@ void HueBridge::Put_light () {
 
     // }
 
-  //   	uint8_t Light = (uint8_t)lightID.toInt();
-		// uint8_t Group = 1; 
-		// RgbColor rgb2; 
-		// rgb2.R = 1; 
-		// rgb2.G = 22; 
-		// rgb2.B = 200; 
+    	uint8_t Light = (uint8_t)lightID.toInt();
 
-		// _Handler(Light, 2000, rgb2); 
+    	_Handler(Light, 2000, rgb); 
+
+    //	_Handler(Light, currentlight); 
+
+
 
 }
 
@@ -669,8 +655,8 @@ uint8_t HueBridge::Extract_LightID() {
 
     String lightID = (_HTTP->uri().substring(_HTTP->uri().indexOf("/lights/") + 8 ,_HTTP->uri().indexOf("/state")));
     uint8_t light  = lightID.toInt() - 1; 
-    Serial.print(" LIGHT ID = ");
-    Serial.println(lightID);
+    //Serial.print(" LIGHT ID = ");
+    //Serial.println(lightID);
     return light ; 
 }
 
@@ -721,70 +707,70 @@ void HueBridge::initSSDP() {
   Serial.println("SSDP Started");
 }
 
-// void HueBridge::SetReply(bool value) {
-// 	_returnJSON = value; 
-// }
+void HueBridge::SetReply(bool value) {
+	_returnJSON = value; 
+}
 
-// bool HueBridge::SetLightState(uint8_t light, bool value){
+bool HueBridge::SetLightState(uint8_t light, bool value){
 
-// 	if(light == 0) return false;
-// 	light--;
-// 	if (light < 0 || light > _LightCount) return false; 
-// 	HueLight* currentlight = &Lights[light]; 
-//     currentlight->State = value; 
-//     return true; 
-// }
+	if(light == 0) return false;
+	light--;
+	if (light < 0 || light > _LightCount) return false; 
+	HueLight* currentlight = &Lights[light]; 
+    currentlight->State = value; 
+    return true; 
+}
 
-// bool HueBridge::GetLightState(uint8_t light) {
+bool HueBridge::GetLightState(uint8_t light) {
 
-// 	if(light == 0) return false;
-// 	light--;
-// 	if (light < 0 || light > _LightCount) return false; 
-// 	HueLight* currentlight = &Lights[light]; 
-// 	return currentlight->State;
+	if(light == 0) return false;
+	light--;
+	if (light < 0 || light > _LightCount) return false; 
+	HueLight* currentlight = &Lights[light]; 
+	return currentlight->State;
 
-// }
+}
 
-// bool HueBridge::SetLightRGB(uint8_t light, RgbColor color) {
+bool HueBridge::SetLightRGB(uint8_t light, RgbColor color) {
 
-// //
-// //					To Do
-// //
+//
+//					To Do
+//
 
-// }
+}
 
-// RgbColor HueBridge::GetLightRGB(uint8_t light) {
-
-
-// //
-// //					To Do
-// //
-
-// }
+RgbColor HueBridge::GetLightRGB(uint8_t light) {
 
 
+//
+//					To Do
+//
 
-
-// bool HueBridge::SetGroupState(uint8_t group, bool value){
-
-// 	if(group == 0) return false;
-// 	group--;
-// 	if (group < 0 || group > _GroupCount) return false; 
-// 	HueGroup* currentgroup = &Groups[group];
-//     currentgroup->State = value; 
-//     return true; 
-// }
+}
 
 
 
-// bool HueBridge::GetGroupState(uint8_t group) {
 
-// 	if(group == 0) return false;
-// 	group--;
-// 	if (group < 0 || group > _GroupCount) return false; 
-// 	HueGroup* currentgroup = &Groups[group];
-//     return currentgroup->State; 
-// }
+bool HueBridge::SetGroupState(uint8_t group, bool value){
+
+	if(group == 0) return false;
+	group--;
+	if (group < 0 || group > _GroupCount) return false; 
+	HueGroup* currentgroup = &Groups[group];
+    currentgroup->State = value; 
+    return true; 
+}
+
+
+
+bool HueBridge::GetGroupState(uint8_t group) {
+
+	if(group == 0) return false;
+	group--;
+	if (group < 0 || group > _GroupCount) return false; 
+	HueGroup* currentgroup = &Groups[group];
+    return currentgroup->State; 
+}
 
 
 
@@ -797,244 +783,250 @@ Thanks to probonopd
 -------------------------------------------------------------------------------------------*/
 
 
-// struct HueHSB HueBridge::rgb2HUEhsb(RgbColor color)
-// {
+struct HueHSB HueBridge::rgb2HUEhsb(RgbColor color)
+{
 
-//   HsbColor hsb = HsbColor(color);
-//   int hue, sat, bri;
+  HsbColor hsb = HsbColor(color);
+  int hue, sat, bri;
 
-//   hue = floor(hsb.H * 182.04 * 360.0);
-//   sat = floor(hsb.S * 254);
-//   bri = floor(hsb.B * 254);
+  hue = floor(hsb.H * 182.04 * 360.0);
+  sat = floor(hsb.S * 254);
+  bri = floor(hsb.B * 254);
 
-//   HueHSB hsb2;
-//   hsb2.H = hue;
-//   hsb2.S = sat;
-//   hsb2.B = bri;
+  HueHSB hsb2;
+  hsb2.H = hue;
+  hsb2.S = sat;
+  hsb2.B = bri;
 
-//   return (hsb2);
-// }
+  return (hsb2);
+}
 
 
 
-// struct RgbColor HueBridge::HUEhsb2rgb(HueHSB color)
-// {
+struct RgbColor HueBridge::HUEhsb2rgb(HueHSB color)
+{
 
-//   float H, S, B;
-//   H = color.H / 182.04 / 360.0;
-//   S = color.S / 254.0; 
-//   B = color.B / 254.0; 
-//   return HsbColor(H, S, B);
-// }
+  float H, S, B;
+  H = color.H / 182.04 / 360.0;
+  S = color.S / 254.0; 
+  B = color.B / 254.0; 
+  return HsbColor(H, S, B);
+}
 
-// struct HueXYColor HueBridge::rgb2xy(RgbColor color) {
+struct HueXYColor HueBridge::rgb2xy(RgbColor color) {
 
-//         float red   =  float(color.R) / 255.0f;
-//         float green =  float(color.G) / 255.0f;
-//         float blue  =  float(color.B) / 255.0f;
+        float red   =  float(color.R) / 255.0f;
+        float green =  float(color.G) / 255.0f;
+        float blue  =  float(color.B) / 255.0f;
 
-//         // Wide gamut conversion D65
-//         float r = ((red > 0.04045f) ? (float) pow((red + 0.055f)
-//                 / (1.0f + 0.055f), 2.4f) : (red / 12.92f));
-//         float g = (green > 0.04045f) ? (float) pow((green + 0.055f)
-//                 / (1.0f + 0.055f), 2.4f) : (green / 12.92f);
-//         float b = (blue > 0.04045f) ? (float) pow((blue + 0.055f)
-//                 / (1.0f + 0.055f), 2.4f) : (blue / 12.92f);
+        // Wide gamut conversion D65
+        float r = ((red > 0.04045f) ? (float) pow((red + 0.055f)
+                / (1.0f + 0.055f), 2.4f) : (red / 12.92f));
+        float g = (green > 0.04045f) ? (float) pow((green + 0.055f)
+                / (1.0f + 0.055f), 2.4f) : (green / 12.92f);
+        float b = (blue > 0.04045f) ? (float) pow((blue + 0.055f)
+                / (1.0f + 0.055f), 2.4f) : (blue / 12.92f);
 
-//         float x = r * 0.649926f + g * 0.103455f + b * 0.197109f;
-//         float y = r * 0.234327f + g * 0.743075f + b * 0.022598f;
-//         float z = r * 0.0000000f + g * 0.053077f + b * 1.035763f;
+        float x = r * 0.649926f + g * 0.103455f + b * 0.197109f;
+        float y = r * 0.234327f + g * 0.743075f + b * 0.022598f;
+        float z = r * 0.0000000f + g * 0.053077f + b * 1.035763f;
 
-//         // Calculate the xy values from the XYZ values
+        // Calculate the xy values from the XYZ values
         
-//         HueXYColor xy_instance;
+        HueXYColor xy_instance;
 
-//         xy_instance.x = x / (x + y + z);
-//         xy_instance.y = y / (x + y + z);
+        xy_instance.x = x / (x + y + z);
+        xy_instance.y = y / (x + y + z);
 
-//         if (isnan(xy_instance.x) ) {
-//             xy_instance.x = 0.0f;
-//         }
-//         if (isnan(xy_instance.y)) {
-//             xy_instance.y = 0.0f;
-//         }
+        if (isnan(xy_instance.x) ) {
+            xy_instance.x = 0.0f;
+        }
+        if (isnan(xy_instance.y)) {
+            xy_instance.y = 0.0f;
+        }
  
-//   return xy_instance; 
+  return xy_instance; 
 
 
-// }
+}
 
-// struct HueXYColor HueBridge::HUEhsb2xy(HueHSB color) {
+struct HueXYColor HueBridge::HUEhsb2xy(HueHSB color) {
 
-// 	RgbColor rgb = HUEhsb2rgb(color);
-// 	double r = rgb.R / 255.0;
-// 	double g = rgb.G / 255.0;
-// 	double b = rgb.B / 255.0;
-// 	double X = r * 0.649926f + g * 0.103455f + b *0.197109f;
-// 	double Y = r * 0.234327f + g * 0.743075f + b * 0.022598f;
-// 	double Z = r * 0.0000000f + g * 0.053077f + b * 1.035763f;
-// 	HueXYColor xy;
-// 	xy.x = X / (X + Y + Z);
-// 	xy.y = Y / (X + Y + Z);
-// 	return xy;
-// }
+	RgbColor rgb = HUEhsb2rgb(color);
+	double r = rgb.R / 255.0;
+	double g = rgb.G / 255.0;
+	double b = rgb.B / 255.0;
+	double X = r * 0.649926f + g * 0.103455f + b *0.197109f;
+	double Y = r * 0.234327f + g * 0.743075f + b * 0.022598f;
+	double Z = r * 0.0000000f + g * 0.053077f + b * 1.035763f;
+	HueXYColor xy;
+	xy.x = X / (X + Y + Z);
+	xy.y = Y / (X + Y + Z);
+	return xy;
+}
 
-// struct HueHSB HueBridge::xy2HUEhsb(HueXYColor xy, uint8_t bri) {
+struct HueHSB HueBridge::xy2HUEhsb(HueXYColor xy, uint8_t bri) {
 
-// 	double x = xy.x;
-// 	double y = xy.y; 
+	double x = xy.x;
+	double y = xy.y; 
 
-// 	double z = 1.0f - xy.x - xy.y;
-// 	double Y = (double)(bri / 254.0); // The given brightness value
-// 	double X = (Y / xy.y) * xy.x;
-// 	double Z = (Y / xy.y) * z;
-// 	double r = X * 1.4628067f - Y * 0.1840623f - Z * 0.2743606f;
-// 	double g = -X * 0.5217933f + Y* 1.4472381f + Z *  0.0677227f;
-// 	double b = X * 0.0349342f - Y * 0.0968930f + Z * 1.2884099f;
-// 	uint8_t R = abs(r) * 255;
-// 	uint8_t G = abs(g) * 255;
+	double z = 1.0f - xy.x - xy.y;
+	double Y = (double)(bri / 254.0); // The given brightness value
+	double X = (Y / xy.y) * xy.x;
+	double Z = (Y / xy.y) * z;
+	double r = X * 1.4628067f - Y * 0.1840623f - Z * 0.2743606f;
+	double g = -X * 0.5217933f + Y* 1.4472381f + Z *  0.0677227f;
+	double b = X * 0.0349342f - Y * 0.0968930f + Z * 1.2884099f;
+	uint8_t R = abs(r) * 255;
+	uint8_t G = abs(g) * 255;
+	uint8_t B = abs(b) * 255;
+	struct HueHSB hsb;
+
+	double mi, ma, delta, h;
+	mi = (R<G)?R:G; mi = (mi<B)?mi:B; ma = (R>G)?R:G;
+	ma = (ma>B)?ma:B;
+	delta = ma - mi;
+	
+	if(ma <= 0.0){
+		hsb.H = 0xFFFF;
+		hsb.S = 1;
+		hsb.B = bri;
+	return hsb;
+	}
+
+ 	if (R >= ma) h = (G - B) / delta; // between yellow & magenta
+	else if(G >= ma) h = 2.0 + (B - R) / delta; // between cyan & yellow
+	else h = 4.0 + ( R - G ) / delta; // between magenta & cyan
+	h *= 60.0; // degrees
+	if(h < 0.0) h += 360.0;
+	hsb.H = (uint16_t)floor(h * 182.04);
+	hsb.S = (uint16_t)floor((delta / ma) * 254);
+	hsb.B = bri;
+	return hsb;
+}
+
+// struct HueHSB ct2hsb(long kelvin, uint8_t bri) {
+// 	double r, g, b;
+// 	long temperature = kelvin / 10;
+// 	if(temperature <= 66) {
+// 		r = 255;
+// 	}
+// 	else {
+// 		r = temperature - 60;
+// 		r = 329.698727446 * pow(r, -0.1332047592);
+// 		if(r < 0) r = 0;
+// 		if(r > 255) r = 255;
+// 	}
+
+// 	if(temperature <= 66) {
+// 		g = temperature;
+// 		g = 99.4708025861 log(g) - 161.1195681661;
+// 		if(g < 0) g = 0;
+// 		if(g > 255) g = 255;
+// 		}
+// 		else {
+// 			g = temperature - 60;
+// 			g = 288.1221695283 pow(g, -0.0755148492);
+// 			if(g < 0) g = 0;
+// 			if(g > 255) g = 255;
+// 		}
+
+// 		if(temperature >= 66) {
+// 			b = 255;
+// 		}
+// 		else {
+// 			if(temperature <= 19) {
+// 			b = 0;
+// 			}
+// 		else {
+// 			b = temperature - 10;
+// 			b = 138.5177312231 * log(b) - 305.0447927307;
+// 			if(b < 0) b = 0;
+// 			if(b > 255) b = 255;
+// 		}
+// 		}
+
+// 	uint8_t R = abs(r) 255;
+// 	uint8_t G = abs(g) 255;
 // 	uint8_t B = abs(b) * 255;
 // 	struct HueHSB hsb;
-
 // 	double mi, ma, delta, h;
 // 	mi = (R<G)?R:G; mi = (mi<B)?mi:B; ma = (R>G)?R:G;
 // 	ma = (ma>B)?ma:B;
 // 	delta = ma - mi;
-	
 // 	if(ma <= 0.0){
-// 		hsb.H = 0xFFFF;
-// 		hsb.S = 1;
-// 		hsb.B = bri;
-// 	return hsb;
-// 	}
-
-// 	if (R >= ma) h = (G - B) / delta; // between yellow & magenta
-// 	else if(G >= ma) h = 2.0 + (B - R) / delta; // between cyan & yellow
-// 	else h = 4.0 + ( R - G ) / delta; // between magenta & cyan
-// 	h *= 60.0; // degrees
-// 	if(h < 0.0) h += 360.0;
-// 	hsb.H = (uint16_t)floor(h * 182.04);
-// 	hsb.S = (uint16_t)floor((delta / ma) * 254);
+// 	hsb.H = 0xFFFF;
+// 	hsb.S = 1;
 // 	hsb.B = bri;
-// 	return hsb;
+// return hsb;
 // }
 
-// // struct HueHSB ct2hsb(long kelvin, uint8_t bri) {
-// // 	double r, g, b;
-// // 	long temperature = kelvin / 10;
-// // 	if(temperature <= 66) {
-// // 		r = 255;
-// // 	}
-// // 	else {
-// // 		r = temperature - 60;
-// // 		r = 329.698727446 * pow(r, -0.1332047592);
-// // 		if(r < 0) r = 0;
-// // 		if(r > 255) r = 255;
-// // 	}
-
-// // 	if(temperature <= 66) {
-// // 		g = temperature;
-// // 		g = 99.4708025861 log(g) - 161.1195681661;
-// // 		if(g < 0) g = 0;
-// // 		if(g > 255) g = 255;
-// // 		}
-// // 		else {
-// // 			g = temperature - 60;
-// // 			g = 288.1221695283 pow(g, -0.0755148492);
-// // 			if(g < 0) g = 0;
-// // 			if(g > 255) g = 255;
-// // 		}
-
-// // 		if(temperature >= 66) {
-// // 			b = 255;
-// // 		}
-// // 		else {
-// // 			if(temperature <= 19) {
-// // 			b = 0;
-// // 			}
-// // 		else {
-// // 			b = temperature - 10;
-// // 			b = 138.5177312231 * log(b) - 305.0447927307;
-// // 			if(b < 0) b = 0;
-// // 			if(b > 255) b = 255;
-// // 		}
-// // 		}
-
-// // 	uint8_t R = abs(r) 255;
-// // 	uint8_t G = abs(g) 255;
-// // 	uint8_t B = abs(b) * 255;
-// // 	struct HueHSB hsb;
-// // 	double mi, ma, delta, h;
-// // 	mi = (R<G)?R:G; mi = (mi<B)?mi:B; ma = (R>G)?R:G;
-// // 	ma = (ma>B)?ma:B;
-// // 	delta = ma - mi;
-// // 	if(ma <= 0.0){
-// // 	hsb.H = 0xFFFF;
-// // 	hsb.S = 1;
-// // 	hsb.B = bri;
-// // return hsb;
-// // }
-
-// // if(R >= ma) h = (G - B) / delta; // between
-// // }
-
-// //http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/
-// // 'Given a temperature (in Kelvin), estimate an RGB equivalent
-
-// struct RgbColor HueBridge::ct2rbg(long tmpKelvin, uint8_t bri) {
-
-//      if (tmpKelvin < 1000) tmpKelvin = 1000;
-//      if (tmpKelvin > 40000)tmpKelvin = 40000;
-
-//      double tmpCalc; 
-//      RgbColor rgb; 
-//      tmpKelvin = tmpKelvin / 100; 
-
-// // RED.
-//      if (tmpKelvin <= 66) {
-//      	rgb.R = 255; 
-//      } else {
-//         tmpCalc = tmpKelvin - 60;
-//         tmpCalc = 329.698727446 * pow(tmpCalc, -0.1332047592);
-//         rgb.R = tmpCalc;
-//         if (rgb.R < 0) rgb.R = 0;
-//         if (rgb.R > 255) rgb.R = 255;
-
-//      }
-// // green
-// 	if (tmpKelvin <= 66) {
-// //         'Note: the R-squared value for this approximation is .996
-//          tmpCalc = tmpKelvin;
-//          tmpCalc = 99.4708025861 * log(tmpCalc) - 161.1195681661;
-//          rgb.G = tmpCalc;
-//          if (rgb.G < 0) rgb.G = 0;
-//          if (rgb.G > 255) rgb.G = 255;
-//    } else {
-// //         'Note: the R-squared value for this approximation is .987
-// 	         tmpCalc = tmpKelvin - 60; 
-// 	         tmpCalc = 288.1221695283 * pow(tmpCalc,-0.0755148492);
-//          	 rgb.G = tmpCalc;
-//          	if (rgb.G < 0) rgb.G = 0;
-//          	if (rgb.G > 255) rgb.G = 255;
-// 	}
-
-// return rgb; 
-
-
-//      }
-
-// struct HueHSB HueBridge::ct2hsb(long tmpKelvin, uint8_t bri) {
-
-// 		RgbColor rgb = ct2rbg(tmpKelvin, bri);
-// 		return (rgb2HUEhsb(rgb)); 
+// if(R >= ma) h = (G - B) / delta; // between
 // }
 
+//http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/
+// 'Given a temperature (in Kelvin), estimate an RGB equivalent
 
-// struct HueXYColor HueBridge::Ct2xy(long tmpKelvin, uint8_t bri) {
+struct RgbColor HueBridge::ct2rbg(long tmpKelvin, uint8_t bri) {
 
-// 		RgbColor rgb = ct2rbg(tmpKelvin, bri);
-// 		return (rgb2xy(rgb)); 
+     if (tmpKelvin < 1000) tmpKelvin = 1000;
+     if (tmpKelvin > 40000)tmpKelvin = 40000;
 
-// 	} 
+     double tmpCalc; 
+     RgbColor rgb; 
+     tmpKelvin = tmpKelvin / 100; 
 
+// RED.
+     if (tmpKelvin <= 66) {
+     	rgb.R = 255; 
+     } else {
+        tmpCalc = tmpKelvin - 60;
+        tmpCalc = 329.698727446 * pow(tmpCalc, -0.1332047592);
+        rgb.R = tmpCalc;
+        if (rgb.R < 0) rgb.R = 0;
+        if (rgb.R > 255) rgb.R = 255;
+
+     }
+// green
+	if (tmpKelvin <= 66) {
+//         'Note: the R-squared value for this approximation is .996
+         tmpCalc = tmpKelvin;
+         tmpCalc = 99.4708025861 * log(tmpCalc) - 161.1195681661;
+         rgb.G = tmpCalc;
+         if (rgb.G < 0) rgb.G = 0;
+         if (rgb.G > 255) rgb.G = 255;
+   } else {
+//         'Note: the R-squared value for this approximation is .987
+	         tmpCalc = tmpKelvin - 60; 
+	         tmpCalc = 288.1221695283 * pow(tmpCalc,-0.0755148492);
+         	 rgb.G = tmpCalc;
+         	if (rgb.G < 0) rgb.G = 0;
+         	if (rgb.G > 255) rgb.G = 255;
+	}
+
+return rgb; 
+
+
+     }
+
+struct HueHSB HueBridge::ct2hsb(long tmpKelvin, uint8_t bri) {
+
+		RgbColor rgb = ct2rbg(tmpKelvin, bri);
+		return (rgb2HUEhsb(rgb)); 
+}
+
+
+struct HueXYColor HueBridge::Ct2xy(long tmpKelvin, uint8_t bri) {
+
+		RgbColor rgb = ct2rbg(tmpKelvin, bri);
+		return rgb2xy(rgb); 
+
+	} 
+
+struct RgbColor HueBridge::XYtorgb(struct HueXYColor xy, uint8_t bri) {
+
+ 	HueHSB hsb = xy2HUEhsb(xy,bri); 
+	return HUEhsb2rgb(hsb);
+
+}
 

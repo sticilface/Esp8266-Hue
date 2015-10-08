@@ -16,7 +16,7 @@ struct HueLight {
   uint8_t Bri{254};
   uint16_t Ct{1000};
   HueXYColor xy;  
-  bool State{true};
+  bool State{false};
   uint16_t Transitiontime{10};
   char Colormode[3]{'h','s'}; // "hs" = hue, "ct" = colour temp, "xy" = xy   
 };
