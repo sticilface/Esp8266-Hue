@@ -9,8 +9,8 @@ todo
 
 user management
 save settings
-Testing of colour conversions + optimising them. 
-Delete groups... finding first free group slot.. etc... 
+Testing of colour conversions + optimising/fixing them. 
+Delete groups/ then adding them -> finding first free group slot.. etc... 
 
 
 
@@ -134,7 +134,6 @@ private:
  	HTTPPrinter printer; 
  	ESP8266WebServer* _HTTP; 
  	WiFiClient _client;
-
 
  	uint8_t _LightCount, _GroupCount, _RunningGroupCount; 
 

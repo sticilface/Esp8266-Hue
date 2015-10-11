@@ -12,6 +12,8 @@
 		
   	{
   		if (_GroupCount < 2) _GroupCount = 2; 
+  	 	initHUE(_LightCount, _GroupCount); 
+
 
   	}
 
@@ -33,11 +35,58 @@ void HueBridge::Begin() {
   		_netmaskString  = StringIPaddress(WiFi.subnetMask()); 
   		_gatewayString = StringIPaddress(WiFi.gatewayIP()); 
 
-  	 	initHUE(_LightCount, _GroupCount); 
-
   	 	initSSDP();
   		
   		_HTTP->onNotFound(std::bind(&HueBridge::HandleWebRequest, this)); //  register the onNotFound for Webserver to HueBridge
+
+ 		Serial.println(F("Philips Hue Started...."));
+ 		Serial.print(F("Size Lights = "));
+ 		Serial.println(sizeof(HueLight) * _LightCount);
+ 		Serial.print(F("Size Groups = "));
+ 		Serial.println(sizeof(HueGroup) * _GroupCount);
+
+ 		// SPIFFS.begin();
+
+  	//  	File configFile = SPIFFS.open("/Hue_conf.txt", "r");
+  		
+  	// 	if (!configFile)
+  	// 		{
+   //  			Serial.println(F("Failed to open Hue_conf.txt.")); 
+  	// 		} else {
+  	// 			Serial.println(F("Opened Hue_conf.txt."));
+  	// 			Serial.print(F("CONFIG FILE CONTENTS---------------------- size "));
+  	// 	// 		Serial.println(configFile.size());
+
+   //   		uint8_t * dataarray = (uint8_t *)malloc(configFile.size());
+
+  	// 	// 		//uint8_t dataarray[configFile.size()];
+   //   		//     uint8_t* p = dataarray;
+   //  			// uint8_t* end = p + configFile.size();
+
+   //  			// uint8_t *p = &_pixels[n * 3];
+
+
+  	// 	 		for (int i = 0; i < ( sizeof(HueLight) * _LightCount ); i++) {
+
+  	// 	 		uint8_t blob = configFile.read(); 
+  	// 	 		Serial.write(blob);
+  				
+  	// 			dataarray[i] = blob; 
+  	// 		    //memcpy (blob , Lights + i, (size_t)1 );
+  	// 			}
+			// 	// Serial.write(dataarray, sizeof(dataarray));
+			// 	memcpy (dataarray , Lights, sizeof(HueLight) * _LightCount );
+  				
+  	// 			Serial.println(F("\nEND of FILE CONTENTS----------------------"));
+  	// 			configFile.close();
+  	// 		}
+
+  	// 	if (!SPIFFS.exists("/Hue_conf.txt")) {
+  	// 		Serial.println(F("Config File Created: Hue_conf.txt."));
+  	//  	    configFile = SPIFFS.open("/Hue_conf.txt", "w+");
+  	// 	}
+
+
 
 }
 
@@ -49,18 +98,9 @@ void HueBridge::initHUE(uint8_t Lightcount, uint8_t Groupcount) {
  		Lights = new HueLight[Lightcount];
  		Groups = new HueGroup[Groupcount];
 
- 			Serial.println("Philips Hue Started....");
- 			Serial.print("Size Lights = ");
- 			Serial.println(sizeof(HueLight) * Lightcount);
- 			Serial.print("Size Groups = ");
- 			Serial.println(sizeof(HueGroup) * Groupcount);
-
  		for (uint8_t i = 0; i < Lightcount; i++) {
     		HueLight* currentlight = &Lights[i];
     		sprintf(currentlight->Name, "Hue Light %u", i+1); 
-    	//	Serial.print(i);
-    	//	Serial.print(" ");
-    	//	Serial.println(currentlight->Name);
  		}
 
 		for (uint8_t i = 0; i < Groupcount; i++) {
@@ -136,7 +176,7 @@ void HueBridge::HandleWebRequest() {
         return; 
 
     } else if ( _HTTP->uri() == "/api"  ) {
-        Serial.print("CREATE_USER - toDO"); 
+        Serial.println("CREATE_USER - toDO"); 
         //Command = CREATE_USER;
         _HTTP->send(404);
         return; 
@@ -154,7 +194,7 @@ void HueBridge::HandleWebRequest() {
 
         if (RequestMethod == HTTP_PUT) { 
           //Command = PUT_LIGHT;
-          Serial.print("PUT_LIGHT"); 
+          //Serial.print("PUT_LIGHT"); 
           Put_light();
 
         } else if (RequestMethod == HTTP_GET) {
@@ -173,7 +213,7 @@ void HueBridge::HandleWebRequest() {
 
         if (RequestMethod == HTTP_PUT) { 
           //Command = PUT_GROUP;
-          Serial.print("PUT_GROUP"); 
+          //Serial.print("PUT_GROUP"); 
           Put_group();
 
         } else if (RequestMethod == HTTP_GET) {
@@ -191,7 +231,7 @@ void HueBridge::HandleWebRequest() {
 	
 	    if (RequestMethod == HTTP_PUT) { 
           //Command = ADD_GROUP;
-          Serial.println("\nADD_GROUP");
+          Serial.println("ADD_GROUP");
           Add_Group();
 
      	 }
@@ -203,18 +243,18 @@ void HueBridge::HandleWebRequest() {
 
       if (RequestMethod == HTTP_PUT) { 
           //Command = PUT_LIGHT_ROOT;
-          Serial.print("PUT_LIGHT_ROOT"); 
+          Serial.println("PUT_LIGHT_ROOT"); 
           Put_Light_Root();
 
         } else {
           //Command = GET_LIGHT_ROOT;
-          Serial.print("GET_LIGHT_ROOT - todo"); 
+          Serial.println("GET_LIGHT_ROOT - todo"); 
           _HTTP->send(404);
         }
         return; 
     } else if  ( _HTTP->uri() == "/api/" + user + "/lights" ) {
          //Command = GET_ALL_LIGHTS; 
-         Serial.print("GET_ALL_LIGHTS- todo"); 
+         Serial.println("GET_ALL_LIGHTS- todo"); 
          _HTTP->send(404);
     	return; 
     }
@@ -380,9 +420,9 @@ void HueBridge::Print_Lights() {
 
 void HueBridge::Print_Groups(){
 
-      for (uint8_t i = 0; i < _RunningGroupCount; i++) {
+      for (uint8_t i = 1; i < _RunningGroupCount; i++) {
           
-          if (i > 0 ) printer.print(",");
+          if (i > 1 ) printer.print(",");
 
           uint8_t GroupNumber = i; 
           HueGroup* currentgroup = &Groups[i];
@@ -393,23 +433,24 @@ void HueBridge::Print_Groups(){
           printer.printf("\"name\":\"%s\",",currentgroup->Name);
           printer.print(F("\"lights\": ["));
 
-          if (i == 0) { // puts all alights in group 0. 
+          // // NOT NEEDED AS GROUP 0 is NOT sent in config... 
+          // if (i == 0) { // puts all alights in group 0. 
 
-            for (uint8_t i = 0; i < _LightCount; i++) {
-              if (i>0) printer.print(",");
-              uint8_t lightnumber = i + 1; 
-              printer.printf("\"%u\"", lightnumber);
+          //   for (uint8_t i = 0; i < _LightCount; i++) {
+          //     if (i>0) printer.print(",");
+          //     uint8_t lightnumber = i + 1; 
+          //     printer.printf("\"%u\"", lightnumber);
+          //   }
+
+          // } else {
+
+            for (uint8_t j = 0; j < currentgroup->LightsCount; j++) {
+              if (j>0) printer.print(",");
+              printer.printf("\"%u\"", currentgroup->LightMembers[j]);
+
             }
 
-          } else {
-
-            for (uint8_t i = 0; i < currentgroup->LightsCount; i++) {
-              if (i>0) printer.print(",");
-              printer.printf("\"%u\"", currentgroup->LightMembers[i]);
-
-            }
-
-          }
+//          }
           printer.print(F("],"));
           printer.print(F("\"type\":\"LightGroup\","));
           printer.print(F("\"action\": {"));
@@ -455,7 +496,7 @@ void HueBridge::Print_Config() {
 void HueBridge::SendJson(JsonObject& root){
 
   size_t size = 0; // root.measureLength(); 
-  Serial.print("  JSON ");
+  //Serial.print("  JSON ");
   WiFiClient c = _HTTP->client();
   printer.Begin(c); 
   printer.SetHeader(200, "text/json");
@@ -474,7 +515,7 @@ void HueBridge::SendJson(JsonArray& root){
 
 
   size_t size = 0; 
-  Serial.print("  JSON ");
+  //Serial.print("  JSON ");
   WiFiClient c = _HTTP->client();
   printer.Begin(c); 
   printer.SetHeader(200, "text/json");
@@ -535,8 +576,8 @@ void HueBridge::Put_light () {
     //                    JSON set up IN + OUT 
     //------------------------------------------------------
 
-    //DynamicJsonBuffer jsonBufferOUT; // create buffer 
-	StaticJsonBuffer<500> jsonBufferOUT;
+    DynamicJsonBuffer jsonBufferOUT; // create buffer 
+	//StaticJsonBuffer<1000> jsonBufferOUT;
 
     DynamicJsonBuffer jsonBufferIN; // create buffer 
     JsonObject& root = jsonBufferIN.parseObject(_HTTP->arg("plain"));
@@ -706,11 +747,12 @@ void HueBridge::Put_light () {
       // free(msgStr);
 
 
-  //  Serial.println();
-//    array.prettyPrintTo(Serial);
-//    Serial.println(); 
+    // Serial.println();
+    // array.prettyPrintTo(Serial);
+    // Serial.println(); 
 
     if (_returnJSON) SendJson(array);
+
     //printer.print("]"); 
     //printer.Send_Buffer(200,"text/json");
     //-------------------------------------
@@ -756,6 +798,28 @@ void HueBridge::Put_light () {
     	_HandlerNEW(Light, rgb, currentlight); 
 
 
+		File configFile = SPIFFS.open("/Hue_conf.txt", "w+");
+  		
+  		if (!configFile)
+  			{
+    			Serial.println(F("Failed to open Hue_conf.txt.")); 
+  			} else {
+  				long start_time = millis(); 
+  				Serial.println(F("Opened Hue_conf.txt for UPDATE...."));
+
+  				//uint8_t * data = static_cast<uint8_t*>(static_cast<void*>(&Lights));
+  				
+  				size_t bytes = configFile.write((uint8_t*)Lights, sizeof(HueLight) * _LightCount );
+  				
+  				configFile.close();
+  				Serial.print("TIME TAKEN: ");
+  				Serial.print(millis() - start_time);
+  				Serial.print("ms, ");
+  				Serial.print(bytes);
+  				Serial.println("B"); 
+  			}
+
+
 
 }
 
@@ -772,9 +836,9 @@ void HueBridge::Put_group () {
       return; 
     }
 
-     Serial.print("\nREQUEST: ");
-     Serial.println(_HTTP->uri());
-     Serial.println(_HTTP->arg("plain"));
+     // Serial.print("\nREQUEST: ");
+     // Serial.println(_HTTP->uri());
+     // Serial.println(_HTTP->arg("plain"));
 
 
     //------------------------------------------------------
@@ -788,10 +852,10 @@ void HueBridge::Put_group () {
     uint8_t numberOfTheGroup = groupNum; 
     String groupID = String(groupNum); 
 
-    Serial.print("\nGr = ");
-    Serial.print(groupID);
-    Serial.print(" _RunningGroupCount = ");
-    Serial.println(_RunningGroupCount);
+    // Serial.print("\nGr = ");
+    // Serial.print(groupID);
+    // Serial.print(" _RunningGroupCount = ");
+    // Serial.println(_RunningGroupCount);
 
     if (numberOfTheGroup > _GroupCount) return; 
 
@@ -801,7 +865,7 @@ void HueBridge::Put_group () {
     struct RgbColor rgb;
     struct HueHSB hsb; 
 
-
+	bool colourschanged = false;   
     //------------------------------------------------------
     //                    JSON set up IN + OUT 
     //------------------------------------------------------
@@ -834,6 +898,7 @@ void HueBridge::Put_group () {
             if (_returnJSON) AddSucessToArray (array, response, F("off") ) ; 
 
           }
+          colourschanged = true; 
 
         }   
 
@@ -842,7 +907,8 @@ void HueBridge::Put_group () {
     //------------------------------------------------------
         //    To Do Colormode..... 
 
-     bool hasHue{false}, hasBri{false}, hasSat{false};  
+     bool hasHue{false}, hasBri{false}, hasSat{false};
+     
      uint16_t hue = currentgroup->Hue ;
      uint8_t sat = currentgroup->Sat ; 
      uint8_t bri = currentgroup->Bri ; 
@@ -930,7 +996,7 @@ void HueBridge::Put_group () {
     if (hasHue || hasSat || hasBri) {
       rgb = HUEhsb2rgb(hsb); //  designed to handle philips hue RGB ALLOCATED FROM JSON REQUEST
       currentgroup->xy = HUEhsb2xy(hsb); // COPYED TO LED STATE incase onother applciation requests colour
-    
+      colourschanged = true; 
    } else if (hasXy) {
 
       rgb = XYtorgb(xy_instance, bri);  // set the color to return
@@ -939,6 +1005,7 @@ void HueBridge::Put_group () {
       currentgroup->Hue = hsb.H; ///floor(hsb.H * 182.04 * 360.0); 
       currentgroup->Sat = hsb.S; //floor(hsb.S * 254);
       currentgroup->Bri = hsb.B; // floor(hsb.B * 254);  
+   	  colourschanged = true; 
    }    
 
 
@@ -1001,9 +1068,9 @@ void HueBridge::Put_group () {
       // free(msgStr);
 
 
-    Serial.println("RESPONSE:");
-    array.prettyPrintTo(Serial);
-    Serial.println(); 
+    // Serial.println("RESPONSE:");
+    // array.prettyPrintTo(Serial);
+    // Serial.println(); 
 
     if (_returnJSON) SendJson(array);
 
@@ -1029,6 +1096,8 @@ void HueBridge::Put_group () {
     	uint8_t Group = (uint8_t)groupID.toInt();
 
     //	_Handler(Light, 2000, rgb); 
+
+    if (colourschanged) {
 
     	if (Group == 0 ) {
 
@@ -1061,6 +1130,8 @@ void HueBridge::Put_group () {
     		}
 
 		}
+
+	}
    // 	_HandlerNEW(Light, rgb, currentlight); 
 
 

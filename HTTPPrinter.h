@@ -1,17 +1,27 @@
 /*--------------------------------------------------------------------
 This lib is designed to stream out data to wificlient, in chunks.
-At the moment the header is fixed, as HTTP 200 for JSON, but this will change.
-To circumvent the issue of unknown size, send the data you want through it
+
+Designed to circumvent the issue of unknown size.  Send the data you want through it
 after setting SetCountMode = true, once fininshed set it to false.  Now when 
-you start to send data, content length is set to this value in header.  This
+you start to send data, content length is set to this value in header.  
+
+This
 method is very fast, much faster than waiting for the client to disconnect. 
 80K, of totally dynamic JSON, made on the fly, can be created and sent in 330ms. 
 
 The buffer size defaults to HTTPPrinterSize, but can be changed at initialisation, 
-for example HTTPPrinter printer(c, 500); will create a 500 byte send buffer. 
-c, is a WiFiClient object reference , typically if you use c = (your HTTP instance).client(); 
+for example HTTPPrinter.Begin (c, 500); will create a 500 byte send buffer. 
+c, is a WiFiClient object reference , typically if you use 
+c = (your HTTP instance).client(); 
 
 Setcountmode returns size of the buffer at that time. 
+
+Send_Buffer allows you to send whatever is in the buffer as long as it is below your 
+HTTPPrinterSize value.  usefull if you don't need to stream through the buffer twice. 
+
+A cool use case is in the ESP8266-Hue lib.  here... functions are created that just print
+to this printer.      printer.Send( _HTTP->client() , 200, "text/json", Send_Config_Callback );
+this then takes care of size by running the function Send_Config_Callback twice... 
 
 Inspiration for design of this lib came from me-no-dev and probonopd. 
 

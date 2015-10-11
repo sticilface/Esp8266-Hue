@@ -38,9 +38,9 @@ ESP8266WebServer HTTP(80);
 
 //HueBridge* Hue = NULL; // used for dynamic memory allocation... 
 
- #define pixelCount 7 // Strip has 30 NeoPixels
+ #define pixelCount 250 // Strip has 30 NeoPixels
  #define pixelPin 2 // Strip is attached to GPIO2 on ESP-01
- #define HUEgroups 3
+ #define HUEgroups 5
  #define HUElights 10
 
  HueBridge Hue(&HTTP, HUElights, HUEgroups, &HandleHue);
@@ -66,44 +66,26 @@ void HandleHue(uint8_t Lightno, struct RgbColor rgb, HueLight* lightdata) {
   Serial.printf( " | light = %3u, %15s , RGB(%3u,%3u,%3u), HSB(%5u,%3u,%3u), XY(%s,%s) | \n", 
       Lightno, lightdata->Name,  rgb.R, rgb.G, rgb.B, lightdata->Hue, lightdata->Sat, lightdata->Bri, x, y); 
  
+        
         Lightno--;
-
-
-         RgbColor original = strip.GetPixelColor(Lightno);
+        RgbColor original = strip.GetPixelColor(Lightno);
         
         AnimUpdateCallback animUpdate = [=](float progress)
         {
-            RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
+            RgbColor updatedColor; 
+
+            if (lightdata->State) { 
+              updatedColor = RgbColor::LinearBlend(original, rgb, progress);
+            } else {
+              updatedColor = RgbColor::LinearBlend(original, RgbColor(0,0,0), progress);
+            }
+
             strip.SetPixelColor(Lightno, updatedColor);
         };
 
         animator.StartAnimation(Lightno, 1000, animUpdate);
 
-
 }
-
-
-
-// void HandleHue(uint8_t Light, uint16_t Time, RgbColor rgb) {
-
-// // Hue callback....  
-
-//   //Serial.printf( " | Callback-> Light = %u, Time = %u (%u,%u,%u) | ", Light, Time, rgb.R, rgb.G, rgb.B); 
-  
-//         Light--;
-
-//          RgbColor original = strip.GetPixelColor(Light);
-        
-//         AnimUpdateCallback animUpdate = [=](float progress)
-//         {
-//             RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
-//             strip.SetPixelColor(Light, updatedColor);
-//         };
-//         animator.StartAnimation(Light, Time, animUpdate);
-
-
-// }
-
 
 
 
@@ -120,18 +102,6 @@ void setup() {
 
   Serial.printf("Sketch size: %u\n", ESP.getSketchSize());
   Serial.printf("Free size: %u\n", ESP.getFreeSketchSpace());
-
-
-  //WiFi.begin(ssid, pass);
-
-  //   if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-  //   Serial.println("WiFi Failed");
-  //   infoLight(red);
-  //   delay(100);
-  //   ESP.reset();
-  // }
-
-  //Serial.print("\n\n");
 
       uint8_t i = 0;
       
@@ -156,19 +126,10 @@ void setup() {
     TelnetServer.begin();
     TelnetServer.setNoDelay(true);
     delay(10);
-    Serial.print("IP address: ");
+    Serial.print("\nIP address: ");
     //String IP = String(WiFi.localIP()); 
     //Serial.println(IP);
     Serial.println(WiFi.localIP());
-
-  //Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
-
-    
-      HTTP.on ( "/test", []() {
-        Serial.println("TEST PAGE HIT");
-    HTTP.send ( 200, "text/plain", "this works as well" );
-      } );
-
 
     Hue.Begin();
 
@@ -179,6 +140,8 @@ void setup() {
     ESP.reset();
   }
 
+  Serial.print("Free Heap: ");
+  Serial.println(ESP.getFreeHeap());
 
 }
 
