@@ -68,17 +68,16 @@
 
         _buffer[_bufferCount++] = data; // put byte into buffer 
 
-    if(_bufferCount == HTTPPrinterSize || _size == _bufferCount ) { // send it if full, or remaining bytes = buffer
+         if(_bufferCount == HTTPPrinterSize || _size == _bufferCount ) { // send it if full, or remaining bytes = buffer
 
+            if (!_headerSent) Send_Header(200, "text/json"); 
 
-      if (!_headerSent) Send_Header(200, "text/json"); 
+              _client.write(_buffer + 0, _bufferCount);
+              _size -= _bufferCount; // keep track of remaining bytes.. 
+              _bufferCount = 0; // reset the buffer to begining.. 
+          } 
+        break;
 
-      size_t sent = _client.write(_buffer + 0, _bufferCount);
-      _size -= _bufferCount; // keep track of remaining bytes.. 
-      _bufferCount = 0; // reset the buffer to begining.. 
-    } 
-
-    break;
     } // end of switch
 
     return true; 
@@ -108,12 +107,36 @@ size_t HTTPPrinter::Send(WiFiClient client, int code, const char* content, print
      return size; 
   }
 
+ void HTTPPrinter::Send_Header () {
+
+      Send_Header(_code, _headerContent);
+      SetCountMode(false);
+
+
+ }
+
+ size_t HTTPPrinter::Send_Buffer(int code, const char* content) {
+
+    _size = _bufferCount; 
+    Send_Header(code, content); 
+    _client.write(_buffer + 0, _size);
+    //Serial.write(_buffer+0, _size); 
+    return _size; 
+    End(); 
+
+ }
+
+
+
  void HTTPPrinter::Send_Header (int code, const char * content) {
 
         if (_headerSent) return; 
 
           uint8_t *headerBuff = (uint8_t*)malloc(128);
           sprintf((char*)headerBuff, "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", code, content,_size);
+         // Serial.println();
+         // Serial.println((char*)headerBuff);
+
           size_t headerLen = strlen((const char*)headerBuff);
           _client.write((const uint8_t*)headerBuff, headerLen);
           free(headerBuff);

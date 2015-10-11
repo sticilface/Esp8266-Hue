@@ -7,7 +7,6 @@ for the colour management header files <RgbColor.h> & <HslColor.h>.
 ***  Needs to be UARTDRIVEN branch, or Animator Branch ***
 
 
-/ffUc/k
 ------------------------------------------------------------------------------*/
 
 
@@ -37,21 +36,55 @@ WiFiUDP OTA;
 
 ESP8266WebServer HTTP(80);
 
-HueBridge* Hue = NULL; 
+//HueBridge* Hue = NULL; // used for dynamic memory allocation... 
 
  #define pixelCount 7 // Strip has 30 NeoPixels
  #define pixelPin 2 // Strip is attached to GPIO2 on ESP-01
  #define HUEgroups 3
  #define HUElights 10
 
- //HueBridge Hue(&HTTP, 10, 5, &HandleHue);
+ HueBridge Hue(&HTTP, HUElights, HUEgroups, &HandleHue);
 
- NeoPixelBus strip = NeoPixelBus(10, 2);
+ NeoPixelBus strip = NeoPixelBus(pixelCount, pixelPin);
 
  NeoPixelAnimator animator(&strip); // NeoPixel animation management object
 
 
-// void HandleHue(uint8_t Light, HueLight* data) {
+void HandleHue(uint8_t Lightno, struct RgbColor rgb, HueLight* lightdata) {
+
+// Hue callback....  
+
+ // Serial.printf( "\n | Light = %u, Name = %s (%u,%u,%u) | ", Lightno, lightdata->Name, lightdata->Hue, lightdata->Sat, lightdata->Bri); 
+          //temporarily holds data from vals
+          char x[10];                
+          char y[10];
+          //4 is mininum width, 3 is precision; float value is copied onto buff
+          dtostrf(lightdata->xy.x, 5, 4, x);
+          dtostrf(lightdata->xy.y, 5, 4, y);
+
+
+  Serial.printf( " | light = %3u, %15s , RGB(%3u,%3u,%3u), HSB(%5u,%3u,%3u), XY(%s,%s) | \n", 
+      Lightno, lightdata->Name,  rgb.R, rgb.G, rgb.B, lightdata->Hue, lightdata->Sat, lightdata->Bri, x, y); 
+ 
+        Lightno--;
+
+
+         RgbColor original = strip.GetPixelColor(Lightno);
+        
+        AnimUpdateCallback animUpdate = [=](float progress)
+        {
+            RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
+            strip.SetPixelColor(Lightno, updatedColor);
+        };
+
+        animator.StartAnimation(Lightno, 1000, animUpdate);
+
+
+}
+
+
+
+// void HandleHue(uint8_t Light, uint16_t Time, RgbColor rgb) {
 
 // // Hue callback....  
 
@@ -59,39 +92,17 @@ HueBridge* Hue = NULL;
   
 //         Light--;
 
-//         //  RgbColor original = strip.GetPixelColor(Light);
+//          RgbColor original = strip.GetPixelColor(Light);
         
-//         // AnimUpdateCallback animUpdate = [=](float progress)
-//         // {
-//         //     RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
-//         //     strip.SetPixelColor(Light, updatedColor);
-//         // };
-//         // animator.StartAnimation(Light, Time, animUpdate);
+//         AnimUpdateCallback animUpdate = [=](float progress)
+//         {
+//             RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
+//             strip.SetPixelColor(Light, updatedColor);
+//         };
+//         animator.StartAnimation(Light, Time, animUpdate);
 
 
 // }
-
-
-
-void HandleHue(uint8_t Light, uint16_t Time, RgbColor rgb) {
-
-// Hue callback....  
-
-  //Serial.printf( " | Callback-> Light = %u, Time = %u (%u,%u,%u) | ", Light, Time, rgb.R, rgb.G, rgb.B); 
-  
-        Light--;
-
-         RgbColor original = strip.GetPixelColor(Light);
-        
-        AnimUpdateCallback animUpdate = [=](float progress)
-        {
-            RgbColor updatedColor = RgbColor::LinearBlend(original, rgb, progress);
-            strip.SetPixelColor(Light, updatedColor);
-        };
-        animator.StartAnimation(Light, Time, animUpdate);
-
-
-}
 
 
 
@@ -111,19 +122,46 @@ void setup() {
   Serial.printf("Free size: %u\n", ESP.getFreeSketchSpace());
 
 
-  WiFi.begin(ssid, pass);
+  //WiFi.begin(ssid, pass);
+
+  //   if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+  //   Serial.println("WiFi Failed");
+  //   infoLight(red);
+  //   delay(100);
+  //   ESP.reset();
+  // }
+
+  //Serial.print("\n\n");
+
+      uint8_t i = 0;
+      
+      while (WiFi.status() != WL_CONNECTED ) {
+        delay(500);
+        i++;
+        Serial.print(".");
+        if (i == 20) { 
+          Serial.print("Failed"); 
+          ESP.reset(); 
+          break; 
+        } ;
+      }
+
+
   if(WiFi.waitForConnectResult() == WL_CONNECTED){
+
+
     MDNS.begin(host);
     MDNS.addService("arduino", "tcp", aport);
     OTA.begin(aport);
     TelnetServer.begin();
     TelnetServer.setNoDelay(true);
+    delay(10);
     Serial.print("IP address: ");
+    //String IP = String(WiFi.localIP()); 
+    //Serial.println(IP);
     Serial.println(WiFi.localIP());
-  }
 
-  //  Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
-  Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
+  //Hue = new HueBridge(&HTTP, 10, 3, &HandleHue); 
 
     
       HTTP.on ( "/test", []() {
@@ -132,8 +170,14 @@ void setup() {
       } );
 
 
+    Hue.Begin();
 
     HTTP.begin();
+
+  } else {
+    Serial.println("CONFIG FAILED... rebooting");
+    ESP.reset();
+  }
 
 
 }
@@ -162,7 +206,6 @@ void loop() {
 
 void OTA_handle(){
 
-    //OTA Sketch
   if (OTA.parsePacket()) {
     IPAddress remote = OTA.remoteIP();
     int cmd  = OTA.parseInt();
@@ -182,7 +225,16 @@ void OTA_handle(){
     }
 
     WiFiClient client;
-    if (client.connect(remote, port)) {
+
+    bool connected = false; 
+
+    delay(2000);
+    
+    //do {
+      connected = client.connect(remote, port); 
+    //} while (!connected || millis() - startTime < 20000);
+
+    if (connected) {
 
       uint32_t written;
       while(!Update.isFinished()){
@@ -199,8 +251,11 @@ void OTA_handle(){
         Update.printError(client);
         Update.printError(Serial);
       }
+    
+
     } else {
       Serial.printf("Connect Failed: %u\n", millis() - startTime);
+      ESP.restart(); 
     }
   }
   //IDE Monitor (connected to Serial)
@@ -227,4 +282,5 @@ void OTA_handle(){
     }
     free(sbuf);
   }
+  //delay(1);
 }

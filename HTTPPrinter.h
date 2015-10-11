@@ -42,9 +42,11 @@ public:
   size_t GetSize();
   size_t SetCountMode(bool mode);
   
-  size_t Send(WiFiClient client, int code, const char* content, printer_callback fn ); 
+  size_t Send(WiFiClient client, int code, const char* content, printer_callback fn ); // uses printer callback
+  size_t Send_Buffer(int code, const char* content); // just sends out the buffer as is... 
 
   void SetHeader(int code, const char* content);
+  void Send_Header ();
 
 private:
   virtual size_t write(uint8_t);  

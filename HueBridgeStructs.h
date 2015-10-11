@@ -14,7 +14,7 @@ struct HueLight {
   uint16_t Hue{65280};
   uint8_t Sat{1};
   uint8_t Bri{254};
-  uint16_t Ct{1000};
+  uint16_t Ct{200};
   HueXYColor xy;  
   bool State{false};
   uint16_t Transitiontime{10};
@@ -27,12 +27,13 @@ struct HueGroup {
   uint16_t Hue{65280};
   uint8_t Sat{1};
   uint8_t Bri{254};
-  uint16_t Ct{1000};
+  uint16_t Ct{200};
   HueXYColor xy;  
   bool State{false};
-  uint8_t LightMembers[10];
+  uint8_t LightMembers[MaxLightMembersPerGroup];
   uint8_t LightsCount{0};
   char Colormode[3]{'h','s'}; // "hs" = hue, "ct" = colour temp, "xy" = xy   
+  bool Inuse{0}; 
 
 };
 
