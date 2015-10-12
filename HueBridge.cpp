@@ -45,17 +45,39 @@ void HueBridge::Begin() {
  		Serial.print(F("Size Groups = "));
  		Serial.println(sizeof(HueGroup) * _GroupCount);
 
- 		// SPIFFS.begin();
+ 		 SPIFFS.begin();
 
-  	//  	File configFile = SPIFFS.open("/Hue_conf.txt", "r");
+  	 	File configFile = SPIFFS.open("/Hue_conf.txt", "r");
   		
-  	// 	if (!configFile)
-  	// 		{
-   //  			Serial.println(F("Failed to open Hue_conf.txt.")); 
-  	// 		} else {
-  	// 			Serial.println(F("Opened Hue_conf.txt."));
-  	// 			Serial.print(F("CONFIG FILE CONTENTS---------------------- size "));
-  	// 	// 		Serial.println(configFile.size());
+  		if (!configFile)
+  			{
+    			Serial.println(F("Failed to open Hue_conf.txt.")); 
+  			} else {
+  				Serial.println(F("Opened Hue_conf.txt."));
+  				Serial.print(F("CONFIG FILE CONTENTS---------------------- size "));
+  				Serial.println();
+  				uint8_t light[sizeof(HueLight)];
+  				size_t size = configFile.size();
+				uint8_t counter = 0; 
+
+				for(int i=0; i<size; i+=sizeof(HueLight)){
+  				
+  					for(int j=0;j<sizeof(HueLight);j++){
+    					light[j] = configFile.read();
+  					}
+  				
+  				HueLight *thelight = (HueLight *)light;
+    			HueLight *currentlight = &Lights[counter];
+    			memcpy (currentlight , thelight , sizeof(HueLight));
+
+  				Serial.printf( "SAVED: light = %3u, %15s, State = %u,HSB(%5u,%3u,%3u) | \n", 
+      			counter, thelight->Name, thelight->State, thelight->Hue, thelight->Sat, thelight->Bri);
+				
+				counter++; 
+				}
+
+
+  		// 		Serial.println(configFile.size());
 
    //   		uint8_t * dataarray = (uint8_t *)malloc(configFile.size());
 
@@ -78,8 +100,8 @@ void HueBridge::Begin() {
 			// 	memcpy (dataarray , Lights, sizeof(HueLight) * _LightCount );
   				
   	// 			Serial.println(F("\nEND of FILE CONTENTS----------------------"));
-  	// 			configFile.close();
-  	// 		}
+  				configFile.close();
+  			}
 
   	// 	if (!SPIFFS.exists("/Hue_conf.txt")) {
   	// 		Serial.println(F("Config File Created: Hue_conf.txt."));
@@ -798,26 +820,30 @@ void HueBridge::Put_light () {
     	_HandlerNEW(Light, rgb, currentlight); 
 
 
-		// File configFile = SPIFFS.open("/Hue_conf.txt", "w+");
-  		
-  // 		if (!configFile)
-  // 			{
-  //   			Serial.println(F("Failed to open Hue_conf.txt.")); 
-  // 			} else {
-  // 				long start_time = millis(); 
-  // 				Serial.println(F("Opened Hue_conf.txt for UPDATE...."));
 
-  // 				//uint8_t * data = static_cast<uint8_t*>(static_cast<void*>(&Lights));
+
+  		long start_time_spiffs = millis(); 
+		 File configFile = SPIFFS.open("/Hue_conf.txt", "w+");
+  		
+  		if (!configFile)
+  			{
+    			Serial.println(F("Failed to open Hue_conf.txt.")); 
+  			} else {
+  				Serial.println(F("Opened Hue_conf.txt for UPDATE...."));
+  				Serial.printf("Start Position =%u \n", configFile.position());
+
+  				uint8_t * data = static_cast<uint8_t*>(static_cast<void*>(Lights));
   				
-  // 				size_t bytes = configFile.write((uint8_t*)Lights, sizeof(HueLight) * _LightCount );
-  				
-  // 				configFile.close();
-  // 				Serial.print("TIME TAKEN: ");
-  // 				Serial.print(millis() - start_time);
-  // 				Serial.print("ms, ");
-  // 				Serial.print(bytes);
-  // 				Serial.println("B"); 
-  // 			}
+  				size_t bytes = configFile.write((uint8_t*)Lights, sizeof(HueLight) * _LightCount );
+  				 Serial.printf("END Position =%u \n", configFile.position());
+
+  				configFile.close();
+  				Serial.print("TIME TAKEN: ");
+  				Serial.print(millis() - start_time_spiffs);
+  				Serial.print("ms, ");
+  				Serial.print(bytes);
+  				Serial.println("B"); 
+  			}
 
 
 
@@ -825,7 +851,7 @@ void HueBridge::Put_light () {
 
 /*-------------------------------------------------------------------------------------------
 
-Functions to process known web request 
+Functions to process known web request   PUT GROUP 
 
 -------------------------------------------------------------------------------------------*/
 
