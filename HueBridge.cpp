@@ -8,11 +8,13 @@
 //  		_Handler(fn),
   		_HandlerNEW(fn),
   		_returnJSON(true), 
-  		_RunningGroupCount(2)
+//  		_RunningGroupCount(2)
+  		_nextfreegroup(0)
 		
   	{
-  		if (_GroupCount < 2) _GroupCount = 2; 
-  	 	initHUE(_LightCount, _GroupCount); 
+  		if (_GroupCount < 2) _GroupCount = 2; // minimum required
+
+  	 	initHUE(_LightCount, _GroupCount); // creates the data structures...
 
 
   	}
@@ -38,6 +40,13 @@ void HueBridge::Begin() {
   	 	initSSDP();
   		
   		_HTTP->onNotFound(std::bind(&HueBridge::HandleWebRequest, this)); //  register the onNotFound for Webserver to HueBridge
+  		_HTTP->serveStatic("/hue/lights.conf", SPIFFS , "/lights.conf"); 
+  		_HTTP->serveStatic("/hue/groups.conf", SPIFFS , "/groups.conf"); 
+  		_HTTP->serveStatic("/hue/test.conf", SPIFFS , "/test.conf"); 
+  		_HTTP->on("/hue/format", [this]() {
+				SPIFFS.format();
+				_HTTP->send ( 200, "text/plain", "DONE" );
+			} );
 
  		Serial.println(F("Philips Hue Started...."));
  		Serial.print(F("Size Lights = "));
@@ -46,69 +55,83 @@ void HueBridge::Begin() {
  		Serial.println(sizeof(HueGroup) * _GroupCount);
 
  		 SPIFFS.begin();
+/*------------------------------------------------------------------------------------------------
 
-  	 	File configFile = SPIFFS.open("/Hue_conf.txt", "r");
+									Import saved Lights from SPIFFS
+
+------------------------------------------------------------------------------------------------*/
+  	 	File LightsFile = SPIFFS.open("/lights.conf", "r");
   		
-  		if (!configFile)
+  		if (!LightsFile)
   			{
-    			Serial.println(F("Failed to open Hue_conf.txt.")); 
+    			Serial.println(F("Failed to open lights.conf")); 
   			} else {
-  				Serial.println(F("Opened Hue_conf.txt."));
-  				Serial.print(F("CONFIG FILE CONTENTS---------------------- size "));
+  				Serial.println(F("Opened lights.conf"));
+  				Serial.print(F("CONFIG FILE CONTENTS----------------------"));
   				Serial.println();
+
   				uint8_t light[sizeof(HueLight)];
-  				size_t size = configFile.size();
+  				size_t size = LightsFile.size();
 				uint8_t counter = 0; 
 
 				for(int i=0; i<size; i+=sizeof(HueLight)){
   				
   					for(int j=0;j<sizeof(HueLight);j++){
-    					light[j] = configFile.read();
+    					light[j] = LightsFile.read();
   					}
   				
   				HueLight *thelight = (HueLight *)light;
     			HueLight *currentlight = &Lights[counter];
     			memcpy (currentlight , thelight , sizeof(HueLight));
 
-  				Serial.printf( "SAVED: light = %3u, %15s, State = %u,HSB(%5u,%3u,%3u) | \n", 
-      			counter, thelight->Name, thelight->State, thelight->Hue, thelight->Sat, thelight->Bri);
+  				Serial.printf( "Saved Light:%3u, %15s, State = %u, HSB(%5u,%3u,%3u) \n", 
+      			counter, thelight->Name, thelight->State, thelight->hsb.H, thelight->hsb.S, thelight->hsb.B);
 				
 				counter++; 
 				}
 
+  				LightsFile.close();
+  			}
+/*------------------------------------------------------------------------------------------------
 
-  		// 		Serial.println(configFile.size());
-
-   //   		uint8_t * dataarray = (uint8_t *)malloc(configFile.size());
-
-  	// 	// 		//uint8_t dataarray[configFile.size()];
-   //   		//     uint8_t* p = dataarray;
-   //  			// uint8_t* end = p + configFile.size();
-
-   //  			// uint8_t *p = &_pixels[n * 3];
+									Import saved Groups from SPIFFS
 
 
-  	// 	 		for (int i = 0; i < ( sizeof(HueLight) * _LightCount ); i++) {
+------------------------------------------------------------------------------------------------*/
+  	 	File GroupsFile = SPIFFS.open("/groups.conf", "r");
+  		
+  		if (!GroupsFile)
+  			{
+    			Serial.println(F("Failed to open groups.conf")); 
+  			} else {
 
-  	// 	 		uint8_t blob = configFile.read(); 
-  	// 	 		Serial.write(blob);
+  				Serial.println(F("Opened groups.conf"));
+  				Serial.print(F("CONFIG FILE CONTENTS----------------------"));
+  				Serial.println();
+
+  				uint8_t group[sizeof(HueGroup)];
+  				size_t size = GroupsFile.size();
+				uint8_t counter = 0; 
+
+				for(int i=0; i<size; i+=sizeof(HueGroup)){
   				
-  	// 			dataarray[i] = blob; 
-  	// 		    //memcpy (blob , Lights + i, (size_t)1 );
-  	// 			}
-			// 	// Serial.write(dataarray, sizeof(dataarray));
-			// 	memcpy (dataarray , Lights, sizeof(HueLight) * _LightCount );
+  					for(int j=0;j<sizeof(HueGroup);j++){
+    					group[j] = GroupsFile.read();
+  					}
   				
-  	// 			Serial.println(F("\nEND of FILE CONTENTS----------------------"));
-  				configFile.close();
+  					HueGroup *thegroup = (HueGroup *)group; // Cast retrieved data as HueGroup... 
+    				HueGroup *currentgroup = &Groups[counter]; // pointer to actual array
+    				memcpy (currentgroup , thegroup , sizeof(HueGroup));
+  					Serial.printf( "Saved Group:%3u, %15s, inuse=%u, State=%u, HSB(%5u,%3u,%3u) \n", 
+      				counter, thegroup->Name, thegroup->Inuse, thegroup->State, thegroup->Hue, thegroup->Sat, thegroup->Bri);
+					counter++; 
+				}
+
+  				GroupsFile.close();
   			}
 
-  	// 	if (!SPIFFS.exists("/Hue_conf.txt")) {
-  	// 		Serial.println(F("Config File Created: Hue_conf.txt."));
-  	//  	    configFile = SPIFFS.open("/Hue_conf.txt", "w+");
-  	// 	}
 
-
+  			_nextfreegroup = find_nextfreegroup(); 
 
 }
 
@@ -302,56 +325,6 @@ void HueBridge::HandleWebRequest() {
     }
 
     //------------------------------------------------------
-    //                    Process command   
-    //------------------------------------------------------
-
-
- //   FuncDelegate f_delegate;
- //   f_delegate = MakeDelegate(this, &HueBridge::Send_Config_Callback);
-
-    //timer.setTimerDelg(1, f_delegate, 1);
-
-  //void (HueBridge::*my_memfunc_ptr)(); 
-  // my_memfunc_ptr = &Send_Config_Callback; 
-
-
-//   switch (Command) {
-
-//     case GET_CONFIG:
-//         //sent = printer.Send( _HTTP->client() , 200, "text/json", std::bind(&HueBridge::Send_Config_Callback, this) ); // Send_Config_Callback
-//         break; 
-//     case GET_FULLSTATE:
-//         //sent = printer.Send( _HTTP->client() , 200, "text/json", std::bind(&HueBridge::Send_DataStore_Callback, this) ); 
-//         break;
-//     case CREATE_USER:
-// //        Create_User();
-//         break;
-//     case PUT_LIGHT:
-//         //Put_light(); 
-// //        _HTTP->send(200);
-//         break;
-//     case PUT_LIGHT_ROOT:
-//         //Put_Light_Root();
-//          break;
-//     case GET_LIGHT_ROOT:
-// //        Get_Light_Root();
-//         break;
-//     case GET_ALL_LIGHTS:
-// //        Send_all_lights();
-//         break;
-//     case PUT_GROUP:
-//     	 //Put_group();
-// //    	 _HTTP->send(200);
-//     	 break; 
-//     case ADD_GROUP:
-//     	 Add_Group();
-//     	 break;
-
-//   }
-
-//   if (sent) Serial.printf(" %uB", sent); 
-
-    //------------------------------------------------------
     //                    END OF NEW command PARSING
     //------------------------------------------------------
 
@@ -418,16 +391,25 @@ void HueBridge::Print_Lights() {
           printer.print(F("\"modelid\":\"LST001\","));
           printer.print(F("\"state\":{"));
           ( currentlight->State == true ) ? printer.print(F("\"on\":true,")) : printer.print(F("\"on\":false,"));
-          printer.printf("\"bri\":%u,", currentlight->Bri);
-          printer.printf("\"hue\":%u,", currentlight->Hue);
-          printer.printf("\"sat\":%u,", currentlight->Sat);
+          printer.printf("\"bri\":%u,", currentlight->hsb.B);
+          printer.printf("\"hue\":%u,", currentlight->hsb.H);
+          printer.printf("\"sat\":%u,", currentlight->hsb.S);
 
           //temporarily holds data from vals
           char x[10];                
           char y[10];
-          //4 is mininum width, 3 is precision; float value is copied onto buff
-          dtostrf(currentlight->xy.x, 5, 4, x);
-          dtostrf(currentlight->xy.y, 5, 4, y);
+          // clear the array
+          memset(x,0,10);
+          memset(y,0,10);
+
+          // check is a number
+          //  if isnan(currentlight->xy.x) currentlight->xy.x = 0;
+          //  if isnan(currentlight->xy.y) currentlight->xy.y = 0;
+          //4 is mininum width, 3 is precision; float value is copied onto buf
+          if (!isnan(currentlight->xy.x)) dtostrf(currentlight->xy.x, 5, 4, x); else x[0] = '0'    ;    
+          if (!isnan(currentlight->xy.y)) dtostrf(currentlight->xy.y, 5, 4, y); else y[0] = '0'    ;     
+          
+          //dtostrf(currentlight->xy.y, 5, 4, y);
 
           printer.printf("\"xy\":[%s,%s],", x, y );
           printer.printf("\"ct\":%u,", currentlight->Ct);
@@ -442,12 +424,15 @@ void HueBridge::Print_Lights() {
 
 void HueBridge::Print_Groups(){
 
-      for (uint8_t i = 1; i < _RunningGroupCount; i++) {
-          
-          if (i > 1 ) printer.print(",");
+uint8_t groups_sent = 0;
 
-          uint8_t GroupNumber = i; 
-          HueGroup* currentgroup = &Groups[i];
+      for (uint8_t GroupNumber = 1; GroupNumber < _GroupCount; GroupNumber++) { // start at 1 to NOT send group 0.. 
+          
+          HueGroup* currentgroup = &Groups[GroupNumber];
+
+       if ( currentgroup->Inuse || GroupNumber == _nextfreegroup ) {   
+
+          if (groups_sent > 0 ) printer.print(",");
 
           printer.print(F("\""));
           printer.print(GroupNumber);
@@ -455,24 +440,12 @@ void HueBridge::Print_Groups(){
           printer.printf("\"name\":\"%s\",",currentgroup->Name);
           printer.print(F("\"lights\": ["));
 
-          // // NOT NEEDED AS GROUP 0 is NOT sent in config... 
-          // if (i == 0) { // puts all alights in group 0. 
-
-          //   for (uint8_t i = 0; i < _LightCount; i++) {
-          //     if (i>0) printer.print(",");
-          //     uint8_t lightnumber = i + 1; 
-          //     printer.printf("\"%u\"", lightnumber);
-          //   }
-
-          // } else {
-
             for (uint8_t j = 0; j < currentgroup->LightsCount; j++) {
               if (j>0) printer.print(",");
               printer.printf("\"%u\"", currentgroup->LightMembers[j]);
 
             }
 
-//          }
           printer.print(F("],"));
           printer.print(F("\"type\":\"LightGroup\","));
           printer.print(F("\"action\": {"));
@@ -494,6 +467,9 @@ void HueBridge::Print_Groups(){
           printer.print(F("\"alert\":\"none\","));
           printer.printf("\"colormode\":\"%s\"", currentgroup->Colormode);
           printer.print("}}");
+
+          groups_sent++; // used for comma placement
+      }
 
   }
       
@@ -561,7 +537,7 @@ void HueBridge::Handle_Description() {
   str += _ipString; 
   str += F(")</friendlyName><manufacturer>Royal Philips Electronics</manufacturer><manufacturerURL>http://www.philips.com</manufacturerURL><modelDescription>Philips hue Personal Wireless Lighting</modelDescription><modelName>Philips hue bridge 2012</modelName><modelNumber>929000226503</modelNumber><modelURL>http://www.meethue.com</modelURL><serialNumber>00178817122c</serialNumber><UDN>uuid:2f402f80-da50-11e1-9b23-00178817122c</UDN><presentationURL>index.html</presentationURL><iconList><icon><mimetype>image/png</mimetype><height>48</height><width>48</width><depth>24</depth><url>hue_logo_0.png</url></icon><icon><mimetype>image/png</mimetype><height>120</height><width>120</width><depth>24</depth><url>hue_logo_3.png</url></icon></iconList></device></root>");
   _HTTP->send(200, "text/plain", str);
-  Serial.println("/Description.xml SENT"); 
+  Serial.println(F("/Description.xml SENT")); 
 
 }
 
@@ -586,52 +562,58 @@ void HueBridge::Put_light () {
     uint8_t numberOfTheLight = Extract_LightID();  
     String lightID = String(numberOfTheLight + 1); 
  
-    HueLight* currentlight;
-    currentlight = &Lights[numberOfTheLight];
+    HueLight* currentlight = &Lights[numberOfTheLight];
 
     struct RgbColor rgb;
-    struct HueHSB hsb; 
 
-
-    uint8_t reply_count = 0; 
     //------------------------------------------------------
     //                    JSON set up IN + OUT 
     //------------------------------------------------------
 
     DynamicJsonBuffer jsonBufferOUT; // create buffer 
-	//StaticJsonBuffer<1000> jsonBufferOUT;
-
     DynamicJsonBuffer jsonBufferIN; // create buffer 
+
     JsonObject& root = jsonBufferIN.parseObject(_HTTP->arg("plain"));
     JsonArray& array = jsonBufferOUT.createArray(); // new method
   	
-  	WiFiClient c = _HTTP->client();
-  	printer.Begin(c); 
-    printer.print("[");
     //------------------------------------------------------
     //                    ON / OFF 
     //------------------------------------------------------
 
-    bool onValue = false; 
+     bool onValue{false}, hasHue{false}, hasBri{false}, hasSat{false}, hasXy{false};  
+
+   //  struct HueHSB &hsb = currentlight->hsb; // might be useful method for later.
+
+
+
+      
+
 
     if (root.containsKey("on"))
         {
           onValue = root["on"]; 
-          String response = "/lights/" + lightID + "/state/on"; // + onoff; 
+
+          String response = F("/lights/"); response += lightID ; response +=  F("/state/on"); // + onoff; 
 
           if (onValue) {
-//            Serial.print("  ON :");
-            currentlight->State = true;
+	            currentlight->State = true;
+
+            if (strcmp (currentlight->Colormode,"hs") == 0 ) {
+
+            	rgb = HUEhsb2rgb(currentlight->hsb); //  designed to handle philips hue RGB ALLOCATED FROM JSON REQUEST
+        	
+        	} else if (strcmp (currentlight->Colormode,"xy") == 0) {
+       			rgb = XYtorgb(currentlight->xy, currentlight->hsb.B);  // set the color to return
+        	}
+
            if (_returnJSON) AddSucessToArray (array, response, F("on") ); 
-            // printer.printf("{\"success\":{\"/lights/%u/state/on\":\"true\"}}",numberOfTheLight + 1); 
-            // reply_count++;
+
           } else {
-//            Serial.print("  OFF :");
+
             currentlight->State = false;
             rgb = RgbColor(0,0,0);
             if (_returnJSON) AddSucessToArray (array, response, F("off") ) ; 
-            // printer.printf("{\"success\":{\"/lights/%u/state/on\":\"false\"}}",numberOfTheLight + 1); 
-            // reply_count++;
+
           }
 
         }   
@@ -639,86 +621,50 @@ void HueBridge::Put_light () {
     //------------------------------------------------------
     //              HUE / SAT / BRI 
     //------------------------------------------------------
-        //    To Do Colormode..... 
-
-     bool hasHue{false}, hasBri{false}, hasSat{false};  
-     uint16_t hue = currentlight->Hue ;
-     uint8_t sat = currentlight->Sat ; 
-     uint8_t bri = currentlight->Bri ; 
         
     if (root.containsKey("hue"))
         {
-          hue = root["hue"]; 
+          currentlight->hsb.H = root["hue"]; 
           String response = "/lights/" + lightID + "/state/hue"; // + onoff; 
-//          Serial.print("  HUE -> ");
-//          Serial.print(hue);
-//          Serial.print(", "); 
           hasHue = true; 
           if (_returnJSON) AddSucessToArray (array, response, root["hue"] ); 
-          // if (reply_count) printer.print(",");
-          // reply_count++;
-          // printer.printf("{\"success\":{\"/lights/%u/state/hue\":\"%u\"}}",numberOfTheLight + 1, hue); 
-
         } 
 
     if (root.containsKey("sat"))
         {
-          sat = root["sat"]; 
+          currentlight->hsb.S = root["sat"]; 
           String response = "/lights/" + lightID + "/state/sat"; // + onoff; 
-//          Serial.print("  SAT -> ");
-//          Serial.print(sat);
-//          Serial.print(", "); 
           hasSat = true; 
           if (_returnJSON) AddSucessToArray (array, response, root["sat"]); 
-          // if (reply_count) printer.print(",");
-          // reply_count++;
-          // printer.printf("{\"success\":{\"/lights/%u/state/sat\":\"%u\"}}",numberOfTheLight + 1, sat); 
+
         } 
 
     if (root.containsKey("bri"))
         {
-          bri = root["bri"]; 
+          currentlight->hsb.B = root["bri"]; 
           String response = "/lights/" + lightID + "/state/bri"; // + onoff; 
-//          Serial.print("  BRI -> ");
-//          Serial.print(bri);
-//          Serial.print(", "); 
           hasBri = true; 
           if (_returnJSON) AddSucessToArray (array, response, root["bri"]); 
-          // if (reply_count) printer.print(",");
-          // reply_count++;
-          // printer.printf("{\"success\":{\"/lights/%u/state/bri\":\"%u\"}}",numberOfTheLight + 1, bri); 
         } 
 
     //------------------------------------------------------
     //              XY Color Space 
     //------------------------------------------------------
 
-     HueXYColor xy_instance; 
-     bool hasXy{false}; 
+
 
     if (root.containsKey("xy"))
         {
-           xy_instance.x = root["xy"][0];
-           xy_instance.y = root["xy"][1];
-           currentlight->xy = xy_instance;
-              // Serial.print("  XY (");
-              // Serial.print(xy_instance.x);
-              // Serial.print(",");
-              // Serial.print(xy_instance.y);
-              // Serial.print(") "); 
-            hasXy = true; 
-
-          // if (reply_count) printer.print(",");
-          // reply_count++;
-          // printer.printf("{\"success\":{\"/lights/%u/state/xy\":[%d,%d]}}",numberOfTheLight + 1, xy_instance.x, xy_instance.y); 
-
+           currentlight->xy.x = root["xy"][0];
+           currentlight->xy.y = root["xy"][1];
+           hasXy = true; 
 
         if (_returnJSON) {
           JsonObject& nestedObject = array.createNestedObject();          
           JsonObject& sucess = nestedObject.createNestedObject("success");
           JsonArray&  xyObject  = sucess.createNestedArray("xy");
-          xyObject.add(xy_instance.x, 4);  // 4 digits: "3.1415"
-          xyObject.add(xy_instance.y, 4);  // 4 digits: "3.1415"
+          xyObject.add(currentlight->xy.x, 4);  // 4 digits: "3.1415"
+          xyObject.add(currentlight->xy.x, 4);  // 4 digits: "3.1415"
       	  }
         }
 
@@ -729,7 +675,7 @@ void HueBridge::Put_light () {
     if (root.containsKey("ct"))
         {
 
-
+        	// todo
 
 
 		}
@@ -739,35 +685,22 @@ void HueBridge::Put_light () {
     //------------------------------------------------------
 
     if (hasHue || hasBri || hasSat) {
-      currentlight->Hue = hsb.H = hue;
-      currentlight->Sat = hsb.S = sat;
-      currentlight->Bri = hsb.B = bri; 
+      rgb = HUEhsb2rgb(currentlight->hsb); //  designed to handle philips hue RGB ALLOCATED FROM JSON REQUEST
+      if (!hasXy) currentlight->xy = HUEhsb2xy(currentlight->hsb); // COPYED TO LED STATE incase onother applciation requests colour
+      strcpy(currentlight->Colormode, "hs");
 
-      rgb = HUEhsb2rgb(hsb); //  designed to handle philips hue RGB ALLOCATED FROM JSON REQUEST
-      currentlight->xy = HUEhsb2xy(hsb); // COPYED TO LED STATE incase onother applciation requests colour
-    
-   } else if (hasXy) {
+   	} 
 
-      rgb = XYtorgb(xy_instance, bri);  // set the color to return
-      hsb = xy2HUEhsb(xy_instance, bri);  // converts for storage...
-      currentlight->Hue = hsb.H; ///floor(hsb.H * 182.04 * 360.0); 
-      currentlight->Sat = hsb.S; //floor(hsb.S * 254);
-      currentlight->Bri = hsb.B; // floor(hsb.B * 254);  
-   }    
+    if (hasXy) {
+      	rgb = XYtorgb(currentlight->xy, currentlight->hsb.B);  // set the color to return
+      	currentlight->hsb = xy2HUEhsb(currentlight->xy, currentlight->hsb.B);  // converts for storage...
+      	strcpy(currentlight->Colormode, "xy");
+   	}    
 
 
     //------------------------------------------------------
     //              SEND Back changed JSON REPLY 
     //------------------------------------------------------
-
-      // char *msgStr = aJson.print(reply);
-      // aJson.deleteItem(reply);
-      // Serial.print("\nJSON REPLY = ");
-      // //Serial.println(millis());
-      // Serial.println(msgStr);
-      // HTTP.send(200, "text/plain", msgStr);
-      // free(msgStr);
-
 
     // Serial.println();
     // array.prettyPrintTo(Serial);
@@ -794,48 +727,27 @@ void HueBridge::Put_light () {
     //              Set up LEDs... rock and roll.... 
     //------------------------------------------------------
 
-    //Serial.println();
+    	_HandlerNEW(numberOfTheLight + 1, rgb, currentlight); 
 
-    // for (uint8_t i = 0; i < pixelCount; i++) {
-    // // define the effect to apply, in this case linear blend
-    //   RgbColor originalColor = strip.GetPixelColor(i); // FIXME: In lambda function: error: 'originalColor' was not declared in this scope - potential reason for crashes?
-
-    //     AnimUpdateCallback animUpdate = [ onValue, originalColor, rgb, i ](float progress)
-    //     {
-    //       // progress will start at 0.0 and end at 1.0
-    //       RgbColor updatedColor; 
-    //       if (onValue) updatedColor = RgbColor::LinearBlend(originalColor, rgb, progress);
-    //       if (!onValue) updatedColor = RgbColor::LinearBlend(originalColor, black, progress);
-    //       strip.SetPixelColor(i, updatedColor);
-    //     };
-
-    //     animator.StartAnimation(i, transitionTime, animUpdate);
-
-    // }
-
-    	uint8_t Light = (uint8_t)lightID.toInt();
-
-    //	_Handler(Light, 2000, rgb); 
-
-    	_HandlerNEW(Light, rgb, currentlight); 
-
-
-
+    //------------------------------------------------------
+    //              Save Settings to SPIFFS
+    //------------------------------------------------------
 
   		long start_time_spiffs = millis(); 
-		 File configFile = SPIFFS.open("/Hue_conf.txt", "w+");
+
+		File configFile = SPIFFS.open("/lights.conf", "r+");
   		
   		if (!configFile)
   			{
-    			Serial.println(F("Failed to open Hue_conf.txt.")); 
+    			Serial.println(F("Failed to open test.conf, making new")); 
+    			configFile = SPIFFS.open("/lights.conf", "w+");
+  			
   			} else {
+  			
   				Serial.println(F("Opened Hue_conf.txt for UPDATE...."));
-  				Serial.printf("Start Position =%u \n", configFile.position());
 
-  				uint8_t * data = static_cast<uint8_t*>(static_cast<void*>(Lights));
-  				
-  				size_t bytes = configFile.write((uint8_t*)Lights, sizeof(HueLight) * _LightCount );
-  				 Serial.printf("END Position =%u \n", configFile.position());
+  				unsigned char * data = reinterpret_cast<unsigned char*>(Lights); // use unsigned char, as uint8_t is not guarunteed to be same width as char...
+  				size_t bytes = configFile.write(data, sizeof(HueLight) * _LightCount ); // C++ way
 
   				configFile.close();
   				Serial.print("TIME TAKEN: ");
@@ -845,7 +757,61 @@ void HueBridge::Put_light () {
   				Serial.println("B"); 
   			}
 
+    /*---------------------------------------------------------------------------------------------------------------------------------------
+                    Experimental - Per Light saving of settings..  move towards file system based storage, for all hue data. 
+  					This is working.. saves only the current light to SPIFFS... 		
+    //---------------------------------------------------------------------------------------------------------------------------------------*/ 			
 
+
+#ifdef EXPERIMENTAL 
+
+		File testFile;
+
+		long t1 = micros();
+		long h1 = ESP.getFreeHeap();
+
+		testFile = SPIFFS.open("/test.conf", "r+");
+
+		File lightFile = SPIFFS.open("/lights.conf", "r+");
+		File groupFile = SPIFFS.open("/groups.conf", "r+");
+
+
+		Serial.printf("Open file time: %uus, heap use = %u \n", micros() - t1 , h1 - ESP.getFreeHeap());
+
+  		long start_spiffs = micros(); 
+
+		if (!testFile) {
+			testFile = SPIFFS.open("/test.conf", "w+");
+		} 
+
+		if (testFile) {
+
+			uint32_t position = numberOfTheLight * sizeof(HueLight);
+
+			if(!testFile.seek(position, SeekSet)) { // if seek fails... ie file is too short
+				testFile.seek(0, SeekEnd); // go to end of file
+					do {
+						testFile.write(0); // write 0 until in right place... 
+					} while (testFile.position() < position); 
+			}
+
+			unsigned char * data = reinterpret_cast<unsigned char*>(currentlight); // C++ way
+  			size_t bytes = testFile.write(data, sizeof(HueLight)); 
+
+  			Serial.printf("newFS Time taken %uus, %uB \n", micros() - start_spiffs, bytes);
+  			
+
+		long t2 = micros();
+		long h2 = ESP.getFreeHeap();
+  		
+  		testFile.close();
+
+		Serial.printf("Open close time: %uus, heap use = %u \n", micros() - t2, ESP.getFreeHeap() - h2);
+
+  		} else {	
+  			Serial.println("FAILED TO WRITE TO + CREATE FILE");
+  		}
+#endif
 
 }
 
@@ -1053,32 +1019,21 @@ void HueBridge::Put_group () {
 
     if (root.containsKey("lights")) {
     	
-    	Serial.println();
-
-    	JsonArray& array2 = root["lights"];
-
+       	JsonArray& array2 = root["lights"];
     	uint8_t i = 0;
 
 			for(JsonArray::iterator it=array2.begin(); it!=array2.end(); ++it) 
 					{
-    			uint8_t value = atoi(it->as<const char*>());    
+    					uint8_t value = atoi(it->as<const char*>());    
+    						if (i < MaxLightMembersPerGroup) {
+    						currentgroup->LightMembers[i] = value; 
+    						}
+    					i++;
+					}
 
-    			if (i < MaxLightMembersPerGroup) {
-
-    				currentgroup->LightMembers[i] = value; 
-    			
-    			//	Serial.print(i);
-    			//	Serial.print(" = ");
-    			//	Serial.println(value);
-
-    			}
-
-    			i++;
-
-				}
-
-				currentgroup->LightsCount = i;
-
+			currentgroup->LightsCount = i;
+			if (i == 0 && groupNum > 1) currentgroup->Inuse = false; else currentgroup->Inuse = true; // added group number check so groups 0+1 are always in use..
+			_nextfreegroup = find_nextfreegroup(); 
     }
 
     //------------------------------------------------------
@@ -1132,9 +1087,9 @@ void HueBridge::Put_group () {
 	    		HueLight* currentlight;
    	 			currentlight = &Lights[i]; // values stored in array are Hue light numbers so + 1; 
    		 		_HandlerNEW(i+1, rgb, currentlight); 
-    			currentlight->Hue = currentgroup->Hue;
-    			currentlight->Sat = currentgroup->Sat;
-    			currentlight->Bri = currentgroup->Bri;
+ //   			currentlight->Hue = currentgroup->Hue;
+ //   			currentlight->Sat = currentgroup->Sat;
+//    			currentlight->Bri = currentgroup->Bri;
     			currentlight->xy = currentgroup->xy; 
     			currentlight->State = currentgroup->State; 
 
@@ -1147,9 +1102,9 @@ void HueBridge::Put_group () {
     			HueLight* currentlight;
     			currentlight = &Lights[currentgroup->LightMembers[i] - 1]; // values stored in array are Hue light numbers so + 1; 
     			_HandlerNEW(currentgroup->LightMembers[i], rgb, currentlight); 
-    			currentlight->Hue = currentgroup->Hue;
-    			currentlight->Sat = currentgroup->Sat;
-    			currentlight->Bri = currentgroup->Bri;
+//    			currentlight->Hue = currentgroup->Hue;
+//    			currentlight->Sat = currentgroup->Sat;
+//    			currentlight->Bri = currentgroup->Bri;
     			currentlight->xy = currentgroup->xy; 
     			currentlight->State = currentgroup->State; 
 
@@ -1158,7 +1113,40 @@ void HueBridge::Put_group () {
 		}
 
 	}
-   // 	_HandlerNEW(Light, rgb, currentlight); 
+
+
+    //------------------------------------------------------
+    //              Save Settings to SPIFFS
+    //------------------------------------------------------
+
+  		long start_time_spiffs = millis(); 
+
+		File configFile = SPIFFS.open("/groups.conf", "w+");
+  		
+  		if (!configFile)
+  			{
+    			Serial.println(F("Failed to open groups.conf")); 
+  			} else {
+  				Serial.println(F("Opened groups.conf for UPDATE...."));
+  				Serial.printf("Start Position =%u \n", configFile.position());
+
+  				unsigned char * data = reinterpret_cast<unsigned char*>(Groups); // use unsigned char, as uint8_t is not guarunteed to be same width as char...
+  				
+  				size_t bytes = configFile.write(data, sizeof(HueGroup) * _GroupCount ); // C++ way
+
+  				Serial.printf("END Position =%u \n", configFile.position());
+
+  				configFile.close();
+  				Serial.print("TIME TAKEN: ");
+  				Serial.print(millis() - start_time_spiffs);
+  				Serial.print("ms, ");
+  				Serial.print(bytes);
+  				Serial.println("B"); 
+  			}
+
+
+
+
 
 
 
@@ -1212,16 +1200,24 @@ void HueBridge::Get_Light_Root() {
 
 }
 
-void HueBridge::Add_Group() {
+bool HueBridge::Add_Group() {
+
+	//im not entirely sure that chroma uses this...  
 
 	Serial.println("ADD GROUP HIT");
 	
-	  if (_HTTP->arg("plain") == "") return; 
+	  if (_HTTP->arg("plain") == "") return 0; 
+	  if (_nextfreegroup == 0 ) return 0 ; // need to add sending error....
 
-	  if (_RunningGroupCount > _GroupCount) return; // need to add sending error....
 
-	HueGroup* currentgroup;
-    currentgroup = &Groups[_RunningGroupCount];
+	HueGroup* currentgroup; 
+
+	  for (uint8_t i = 0; i <= _GroupCount; i++){
+			currentgroup = &Groups[i];
+			if (!currentgroup->Inuse) break; 
+			if (i == _GroupCount) return 0; // if they are all full return...
+	  }
+
 
     DynamicJsonBuffer jsonBufferOUT; // create buffer 
     DynamicJsonBuffer jsonBufferIN; // create buffer 
@@ -1236,7 +1232,9 @@ void HueBridge::Add_Group() {
 
     if (root.containsKey("name")) {
 
-		Name_Group(_RunningGroupCount, root["name"]);
+//		Name_Group(_RunningGroupCount, root["name"]);
+		Name_Group(currentgroup, root["name"]);
+
  //       String response = "/groups/" + groupID + "/name/"; // + onoff; 
  //       if (_returnJSON) AddSucessToArray (array, response, root["name"]); 
 
@@ -1277,7 +1275,18 @@ void HueBridge::Add_Group() {
     }
 
 
-	  _RunningGroupCount++;
+//	  _RunningGroupCount++;
+
+	uint8_t freegroups = 0; 
+
+	  for (uint8_t i = 0; i < _GroupCount; i++){
+			HueGroup* currentgroup = &Groups[i];
+			if (!currentgroup->Inuse) freegroups++; 
+	  }
+
+	  Serial.printf("Free groups remaining %u\n", freegroups); 
+
+      _nextfreegroup = find_nextfreegroup(); 
 
 
 }
@@ -1301,6 +1310,20 @@ void HueBridge::Name_Light(uint8_t i,  String &name) {
 
 }
 
+
+
+void HueBridge::Name_Group(HueGroup * currentgroup, const char* name) {
+
+  //if (i > _GroupCount) return; 
+  //HueGroup* currentgroup;
+  //currentgroup = &Groups[i];
+  memset(currentgroup->Name, 0, sizeof(currentgroup->Name));
+  //memcpy(StripHueData[i].name, name, sizeof(name) ); 
+  strcpy(currentgroup->Name, name ); 
+}
+
+
+
 void HueBridge::Name_Group(uint8_t i, const char* name) {
 
   if (i > _GroupCount) return; 
@@ -1312,14 +1335,14 @@ void HueBridge::Name_Group(uint8_t i, const char* name) {
 }
 
 
-void HueBridge::Name_Group(uint8_t i,  String &name) {
+// void HueBridge::Name_Group(uint8_t i,  String &name) {
 
-    if (i > _GroupCount) return; 
-    HueGroup* currentgroup;
-    currentgroup = &Groups[i];
-    name.toCharArray(currentgroup->Name, 32);
+//     if (i > _GroupCount) return; 
+//     HueGroup* currentgroup;
+//     currentgroup = &Groups[i];
+//     name.toCharArray(currentgroup->Name, 32);
 
-}
+// }
 
 uint8_t HueBridge::Extract_LightID() {
 
@@ -1720,4 +1743,23 @@ char* HueBridge::subStr(const char* str, char *delim, int index) {
   }
   return sub;
 }
+
+
+uint8_t HueBridge::find_nextfreegroup() {
+
+	HueGroup* currentgroup = &Groups[_nextfreegroup]; 
+
+	if (!currentgroup->Inuse) return _nextfreegroup; 
+
+	  for (uint8_t i = 0; i < _GroupCount; i++){
+			currentgroup = &Groups[i];
+			if (!currentgroup->Inuse) return i; 
+	  }
+
+	  return 0; 
+
+}
+
+
+
 

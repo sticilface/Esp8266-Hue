@@ -63,8 +63,8 @@ void HandleHue(uint8_t Lightno, struct RgbColor rgb, HueLight* lightdata) {
           dtostrf(lightdata->xy.y, 5, 4, y);
 
 
-  Serial.printf( " | light = %3u, %15s , RGB(%3u,%3u,%3u), HSB(%5u,%3u,%3u), XY(%s,%s) | \n", 
-      Lightno, lightdata->Name,  rgb.R, rgb.G, rgb.B, lightdata->Hue, lightdata->Sat, lightdata->Bri, x, y); 
+  Serial.printf( " | light = %3u, %15s , RGB(%3u,%3u,%3u), HSB(%5u,%3u,%3u), XY(%s,%s),mode=%s | \n", 
+      Lightno, lightdata->Name,  rgb.R, rgb.G, rgb.B, lightdata->hsb.H, lightdata->hsb.S, lightdata->hsb.B, x, y, lightdata->Colormode); 
  
         
         Lightno--;
@@ -127,7 +127,7 @@ void setup() {
     TelnetServer.setNoDelay(true);
     delay(10);
     Serial.print("\nIP address: ");
-    //String IP = String(WiFi.localIP()); 
+    String IP = String(WiFi.localIP()); 
     //Serial.println(IP);
     Serial.println(WiFi.localIP());
 
