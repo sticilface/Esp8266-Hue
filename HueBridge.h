@@ -136,6 +136,7 @@ private:
     char* subStr(const char* str, char *delim, int index);
   	void initHUE(uint8_t Lightcount, uint8_t Groupcount);
   	uint8_t find_nextfreegroup();
+	bool SPIFFS_LIGHT(uint8_t no, HueLight *L, bool save); 
 
 
 	String StringIPaddress(IPAddress myaddr);
@@ -160,6 +161,9 @@ private:
  
  //	HueHandlerFunction _Handler; 
 	HueHandlerFunctionNEW _HandlerNEW;
+
+	File L_File;
+	File G_File;
 
  	//enum Hue_Commands { NO = 0, CREATE_USER, GET_CONFIG, GET_FULLSTATE, GET_LIGHT, GET_NEW_LIGHTS, PUT_LIGHT, 
  	//	GET_ALL_LIGHTS, PUT_LIGHT_ROOT, GET_LIGHT_ROOT, PUT_GROUP, GET_GROUP, ADD_GROUP }; 
