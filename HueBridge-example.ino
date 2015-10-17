@@ -38,15 +38,15 @@ ESP8266WebServer HTTP(80);
 
 //HueBridge* Hue = NULL; // used for dynamic memory allocation... 
 
- #define pixelCount 250 // Strip has 30 NeoPixels
+ #define pixelCount 100 // Strip has 30 NeoPixels
  #define pixelPin 2 // Strip is attached to GPIO2 on ESP-01
- #define HUEgroups 5
- #define HUElights 10
+
+ #define HUElights 100
+ #define HUEgroups 3
+
 
  HueBridge Hue(&HTTP, HUElights, HUEgroups, &HandleHue);
-
  NeoPixelBus strip = NeoPixelBus(pixelCount, pixelPin);
-
  NeoPixelAnimator animator(&strip); // NeoPixel animation management object
 
 

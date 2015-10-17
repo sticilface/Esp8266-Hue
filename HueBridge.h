@@ -7,10 +7,9 @@ Inspiration for design of this lib came from me-no-dev and probonopd.
 
 todo
 
-FIX nan for xy colour convertion.. breaks the JSON...
-Add /format for spiffs...
+Prevent saving.. with rapid update.. stop FLASH from being worn out!  
+
 user management
-save settings - kind of done.  groups not done properly.  just saves all to SPIFFS
 Testing of colour conversions + optimising/fixing them. 
 Delete groups/ then adding them -> finding first free group slot.. etc... 
 Shift over to SPIFFS filesystem, for everything, so whole array is not kept in RAM!  
@@ -49,17 +48,15 @@ Could allow lights to do different things.  such as call an MQTT function / UDP 
 #include "HueBridgeStructs.h"
 #include "HTTPPrinter.h"
 
-#define cache ICACHE_FLASH_ATTR // not being used yet... 
+#define cache //ICACHE_FLASH_ATTR // seems to decrease ram by 300 bytes, not increase it...
 
 #define EXPERIMENTAL // stuff for me to play with...
+#define MIN_REFERSH_SAVE_DISABLE 1500 //
 
 static const char *HTTPMethod_text[] = { "HTTP_ANY", "HTTP_GET", "HTTP_POST", "HTTP_PUT", "HTTP_PATCH", "HTTP_DELETE" };
 
- class RgbColor;
- class HsbColor;
-
-//typedef std::function<void(uint8_t Light, HueLight* currentlight)> HueHandlerFunction;
-
+class RgbColor;
+class HsbColor;
 
 class HueBridge  
 {
@@ -81,9 +78,8 @@ public:
   	bool SetLightRGB(uint8_t light, RgbColor color);                   //ToDo
   	struct RgbColor GetLightRGB(uint8_t light);          			   //ToDo
 
-  	 bool GetGroupState(uint8_t group);                                 //ToDo
-  	 bool SetGroupState(uint8_t group, bool value);                     //ToDo
-
+  	bool GetGroupState(uint8_t group);                                 //ToDo
+  	bool SetGroupState(uint8_t group, bool value);                     //ToDo
   	
   	void SetGroupRGB(uint8_t group, uint8_t R, uint8_t G, uint8_t B);  //ToDo
   	void GetGroupRGB(uint8_t group);                                   //ToDo
@@ -91,13 +87,15 @@ public:
 	void Get_Light_Root(); 											   //  NOT IMPLEMENTED 
 	void Put_Light_Root();
 
-	void Name_Light(uint8_t i, const char* name);
-	void Name_Light(uint8_t i,  String &name);
-    void Name_Group(uint8_t i, const char* name);
+	//void Name_Light(uint8_t i, const char* name);
+	//void Name_Light(uint8_t i,  String &name);
+    void Name_Light(HueLight * currentgroup, const char* name);
+
+   // void Name_Group(uint8_t i, const char* name);
     void Name_Group(HueGroup * currentgroup, const char* name);
+	//void Name_Group(uint8_t i,  String &name);
 
 
-	void Name_Group(uint8_t i,  String &name);
 
 	bool Add_Group();
 
@@ -134,10 +132,11 @@ private:
 	void initSSDP();
     void HandleWebRequest();
     char* subStr(const char* str, char *delim, int index);
-  	void initHUE(uint8_t Lightcount, uint8_t Groupcount);
+  	//void initHUE(uint8_t Lightcount, uint8_t Groupcount);
   	uint8_t find_nextfreegroup();
-	bool SPIFFS_LIGHT(uint8_t no, HueLight *L, bool save); 
-
+	
+	bool SPIFFS_LIGHT(uint8_t no, HueLight *L, bool save ); 
+	bool SPIFFS_GROUP(uint8_t no, HueGroup *G, bool save );
 
 	String StringIPaddress(IPAddress myaddr);
 
@@ -152,21 +151,20 @@ private:
 	String _ipString;
 	String _netmaskString;
 	String _gatewayString;
-	bool isAuthorized, _returnJSON; 
-
+	bool _isAuthorized, _returnJSON, _save; 
 	long _lastrequest = 0; 
 
- 	HueLight * Lights = NULL; 
- 	HueGroup * Groups = NULL; 
+	// had it all working with pointers so carried on doing so... no so needed though... 
+	struct HueLight Lightdata;
+	struct HueGroup Groupdata;
+ 	struct HueLight * currentlight = &Lightdata;
+ 	struct HueGroup * currentgroup = &Groupdata; 
  
  //	HueHandlerFunction _Handler; 
 	HueHandlerFunctionNEW _HandlerNEW;
 
 	File L_File;
 	File G_File;
-
- 	//enum Hue_Commands { NO = 0, CREATE_USER, GET_CONFIG, GET_FULLSTATE, GET_LIGHT, GET_NEW_LIGHTS, PUT_LIGHT, 
- 	//	GET_ALL_LIGHTS, PUT_LIGHT_ROOT, GET_LIGHT_ROOT, PUT_GROUP, GET_GROUP, ADD_GROUP }; 
 
 
 };

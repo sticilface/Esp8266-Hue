@@ -35,8 +35,7 @@ struct HueGroup {
   uint8_t LightsCount{0};
   char Colormode[3]{'h','s','\0'}; // "hs" = hue, "ct" = colour temp, "xy" = xy   
   //char Colormode[3]; // "hs" = hue, "ct" = colour temp, "xy" = xy   
-
-  bool Inuse{0}; 
+  bool Inuse{false}; 
 
 };
 
